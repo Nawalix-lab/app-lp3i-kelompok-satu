@@ -183,12 +183,6 @@ export default function RegisterScreen() {
         <View className="flex-1 justify-center px-6 py-8">
           {/* Header */}
           <View className="mb-8">
-            <TouchableOpacity 
-              onPress={() => router.back()}
-              className="mb-4"
-            >
-              <Text className="text-blue-500 text-base">← Kembali</Text>
-            </TouchableOpacity>
             
             <Text className="text-3xl font-bold text-gray-900 mb-2">
               Buat Akun Baru

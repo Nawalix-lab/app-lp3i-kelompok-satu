@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { supabase } from '../lib/supabase'; // Pastikan path import ini benar
 import "../global.css";
 import React from 'react';
 
@@ -9,12 +10,32 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect ke login setelah 2 detik
-    const timer = setTimeout(() => {
-      router.replace('/(auth)/login');
-    }, 2000);
+    const checkUserSession = async () => {
+      try {
+        // 1. Cek apakah ada sesi yang aktif
+        const { data: { session } } = await supabase.auth.getSession();
 
-    return () => clearTimeout(timer);
+        // 2. Beri delay sedikit agar splash screen tampil (opsional)
+        // Jika ingin instan, hapus setTimeout dan jalankan isinya langsung
+        setTimeout(() => {
+          if (session) {
+            // Jika user sudah login, arahkan langsung ke Dashboard (tabs)
+            console.log('Session found, directing to tabs');
+            router.replace('/(tabs)');
+          } else {
+            // Jika belum login, arahkan ke halaman Login
+            console.log('No session, directing to login');
+            router.replace('/(auth)/login');
+          }
+        }, 2000); 
+        
+      } catch (error) {
+        // Jika error, default ke login
+        router.replace('/(auth)/login');
+      }
+    };
+
+    checkUserSession();
   }, []);
 
   return (

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -14,37 +15,72 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [userName, setUserName] = useState<string>("");
+
+  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function checkSession() {
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+    setLoading(false);
+
+    if (!data.session) {
+      router.replace("/(auth)/login");
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email || "");
-        setUserName((user.user_metadata as any)?.full_name || "");
+        setUserName(user.user_metadata?.full_name || "");
       }
     });
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        if (session) {
+          setUserEmail(session.user.email || "");
+          setUserName(session.user.user_metadata?.full_name || "");
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
   function signOut() {
-    Alert.alert(
-      "Keluar Akun",
-      "Yakin ingin keluar dari kaStok?",
-      [
-        { text: "Batal", style: "cancel" },
-        {
-          text: "Keluar",
-          style: "destructive",
-          onPress: async () => {
-            await supabase.auth.signOut();
-            router.replace("/(auth)/login");
-          },
+    Alert.alert("Keluar Akun", "Yakin ingin keluar dari kaStok?", [
+      { text: "Batal", style: "cancel" },
+      {
+        text: "Keluar",
+        style: "destructive",
+        onPress: async () => {
+          await supabase.auth.signOut();
+          router.replace("/(auth)/login");
         },
-      ]
+      },
+    ]);
+  }
+
+  // LOADING SCREEN SAAT CEK SESSION
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text className="mt-2 text-gray-500">Memuat data pengguna...</Text>
+      </View>
     );
   }
+
+  if (!session) return null;
 
   return (
     <View className="flex-1 bg-white">
@@ -61,6 +97,7 @@ export default function HomeScreen() {
             </Text>
             <Text className="text-[12px] text-gray-500 mt-1">{userEmail}</Text>
           </View>
+
           <View className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
             <Text className="text-lg font-bold text-blue-500">{initial}</Text>
           </View>
@@ -227,7 +264,6 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </View>
   );
