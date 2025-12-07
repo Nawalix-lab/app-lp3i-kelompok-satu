@@ -153,19 +153,11 @@ export default function HomeScreen() {
   // --------------------------
   // LOGOUT
   // --------------------------
-  function signOut() {
-    Alert.alert("Keluar Akun", "Yakin ingin keluar dari kaStok?", [
-      { text: "Batal", style: "cancel" },
-      {
-        text: "Keluar",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace("/(auth)/login");
-        },
-      },
-    ]);
-  }
+  const signOut = async () => {
+    // Logika utama
+    await supabase.auth.signOut();
+    router.replace("/(auth)/login");
+  };
 
   // --------------------------
   // LOADING
