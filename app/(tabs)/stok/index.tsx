@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, TouchableOpacity, FlatList, TextInput, RefreshControl, Modal, ScrollView, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase"; 
 import "../../../global.css";
@@ -11,14 +12,22 @@ export default function StokScreen() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterCategory, setFilterCategory] = useState("Semua");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
 
   const fetchProducts = async () => {
+    if (!session?.user?.id) return;
+
     try {
-      let query = supabase.from('products').select('*').order('name', { ascending: true });
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', session.user.id) // <-- FILTER BERDASARKAN USER ID
+        .order('name', { ascending: true });
+
       if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
+
       const { data, error } = await query;
       if (error) throw error;
       setProducts(data || []);
@@ -29,12 +38,23 @@ export default function StokScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchProducts(); }, [searchQuery]));
+  useFocusEffect(useCallback(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchProducts();
+      } else {
+        router.replace('/(auth)/login');
+      }
+    });
+  }, []));
 
-  const filteredProducts = products.filter(item => {
-    if (filterCategory === "Semua") return true;
-    return item.category === filterCategory;
-  });
+  // Re-fetch when search query or session changes
+  useEffect(() => {
+    if (session) {
+      fetchProducts();
+    }
+  }, [searchQuery, session]);
 
   const handleDelete = (item) => {
     Alert.alert(
@@ -47,7 +67,10 @@ export default function StokScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { error } = await supabase.from('products').delete().eq('id', item.id);
+              const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', item.id);
               if (error) throw error;
               fetchProducts();
             } catch (error: any) {
@@ -119,11 +142,11 @@ export default function StokScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar style="dark" />
       
       {/* Header */}
-      <View className="bg-white pt-14 pb-2 px-5 border-b border-gray-200 shadow-sm z-10">
+      <View className="bg-white pt-2 pb-2 px-5 border-b border-gray-200 shadow-sm z-10">
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center">
             <TouchableOpacity onPress={() => router.replace('/(tabs)')} className="mr-3 p-1">
@@ -144,20 +167,6 @@ export default function StokScreen() {
           <TextInput className="flex-1 ml-3 text-base text-gray-900" placeholder="Cari nama barang..." value={searchQuery} onChangeText={setSearchQuery} />
         </View>
 
-        {/* FILTER TABS */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
-          {["Semua", "Makanan", "Minuman", "Snack", "Lain-lain"].map((cat) => (
-            <TouchableOpacity 
-              key={cat}
-              onPress={() => setFilterCategory(cat)}
-              className={`px-4 py-2 rounded-full border mr-2 ${filterCategory === cat ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-200'}`}
-            >
-              <Text className={`text-xs font-medium ${filterCategory === cat ? 'text-white' : 'text-gray-600'}`}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       <View className="px-5 mt-4 mb-2">
@@ -174,7 +183,7 @@ export default function StokScreen() {
       </View>
 
       <FlatList
-        data={filteredProducts}
+        data={products}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
@@ -214,6 +223,6 @@ export default function StokScreen() {
         </View>
       </Modal>
 
-    </View>
+    </SafeAreaView>
   );
 }

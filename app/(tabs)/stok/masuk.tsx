@@ -23,6 +23,7 @@ export default function BarangMasukScreen() {
   const [modalVisible, setModalVisible] = useState(false); // Modal cari manual
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [session, setSession] = useState<any>(null);
 
   // Camera State
   const [permission, requestPermission] = useCameraPermissions();
@@ -30,11 +31,17 @@ export default function BarangMasukScreen() {
   const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
-    fetchProducts();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchProducts(session.user.id);
+      }
+    });
   }, []);
 
-  const fetchProducts = async () => {
-    const { data } = await supabase.from('products').select('*').order('name');
+  const fetchProducts = async (userId: string) => {
+    if (!userId) return;
+    const { data } = await supabase.from('products').select('*').eq('user_id', userId).order('name');
     if (data) setProducts(data);
   };
 
@@ -67,6 +74,7 @@ export default function BarangMasukScreen() {
 
   const handleSubmit = async () => {
     if (!selectedProduct) return alert("Pilih barang dahulu.");
+    if (!session?.user?.id) return alert("Sesi pengguna tidak ditemukan.");
     if (!quantity || parseInt(quantity) <= 0) return alert("Jumlah minimal 1.");
 
     setLoadingSubmit(true);
@@ -86,6 +94,7 @@ export default function BarangMasukScreen() {
           type: 'IN',
           quantity: qtyInt,
           notes: notes || 'Restock Barang',
+          user_id: session.user.id // <-- Tambahkan user_id
         });
       if (logError) throw logError;
 

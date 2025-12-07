@@ -14,6 +14,7 @@ export default function EditProdukScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+
   // Form State
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -26,8 +27,17 @@ export default function EditProdukScreen() {
 
   useEffect(() => {
     async function loadProduct() {
-      if (!id) return;
-      const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!id || !session?.user?.id) {
+        router.back();
+        return;
+      }
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', session.user.id) // <-- Pastikan produk milik user
+        .single();
       if (error) {
         Alert.alert("Error", "Gagal memuat data produk");
         router.back();

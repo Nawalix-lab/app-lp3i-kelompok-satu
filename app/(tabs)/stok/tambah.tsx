@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet, Button } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -11,6 +11,7 @@ export default function TambahProdukScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [session, setSession] = useState<any>(null);
 
   // --- KAMERA STATE ---
   const [permission, requestPermission] = useCameraPermissions();
@@ -26,6 +27,12 @@ export default function TambahProdukScreen() {
   const [category, setCategory] = useState("Makanan");
   const [description, setDescription] = useState("");
   const [initialStock, setInitialStock] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+  }, []);
 
   // --- FUNGSI SCAN BARCODE ---
   const handleScanPress = async () => {
@@ -50,12 +57,18 @@ export default function TambahProdukScreen() {
 
   async function handleSave() {
     if (!name) return alert("Nama barang wajib diisi!");
+    if (!session?.user?.id) return alert("Sesi pengguna tidak ditemukan, silakan login ulang.");
     
     setLoading(true);
 
     try {
       if (sku) {
-        const { data: existing } = await supabase.from('products').select('id').eq('sku', sku).single();
+        const { data: existing } = await supabase
+          .from('products')
+          .select('id')
+          .eq('sku', sku)
+          .eq('user_id', session.user.id) // Cek SKU hanya untuk user ini
+          .single();
         if (existing) {
           alert("Kode Barang (SKU) sudah digunakan.");
           setLoading(false);
@@ -76,7 +89,8 @@ export default function TambahProdukScreen() {
           price: priceVal,
           stock: stockVal,
           category,
-          description
+          description,
+          user_id: session.user.id // <-- Tambahkan user_id
         })
         .select()
         .single();
@@ -89,6 +103,7 @@ export default function TambahProdukScreen() {
           type: 'IN',
           quantity: stockVal,
           notes: 'Stok Awal',
+          user_id: session.user.id // <-- Tambahkan user_id
         });
       }
 

@@ -1,11 +1,12 @@
 // app/(tabs)/notifikasi.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -27,10 +28,17 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
 
   const fetchLowStock = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setItems([]);
+        return;
+      }
+
       setLoading(true);
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, stock, min_stock");
+        .select("id, name, stock, min_stock")
+        .eq('user_id', session.user.id); // <-- FILTER BERDASARKAN USER ID
 
       if (error) {
         console.log(error);
@@ -52,12 +60,21 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
     fetchLowStock();
   }, []);
 
+  const onRefresh = useCallback(() => {
+    // `fetchLowStock` sudah mengatur state loading-nya sendiri
+    fetchLowStock();
+  }, []);
+
+  // State `refreshing` untuk RefreshControl harus dikontrol secara terpisah
+  // dari `loading` agar tidak ada konflik UI.
+  const refreshing = loading;
+
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white">
       <StatusBar style="dark" />
 
       {/* HEADER */}
-      <View className="pt-12 pb-4 px-5 flex-row items-center justify-between border-b border-gray-100 bg-white">
+      <View className="pt-2 pb-4 px-5 flex-row items-center justify-between border-b border-gray-100 bg-white">
         <View className="flex-row items-center">
           <TouchableOpacity
             onPress={() => router.back()}
@@ -77,6 +94,9 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {loading ? (
           <View className="mt-10 items-center">
@@ -124,6 +144,6 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
           ))
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

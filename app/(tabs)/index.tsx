@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import "../../global.css";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -23,24 +25,16 @@ interface Product {
 
 export default function HomeScreen() {
   const router = useRouter();
-
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // --------------------------
-  // CEK SESSION LOGIN
-  // --------------------------
-  async function checkSession() {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    setLoading(false);
-
-    if (!data.session) {
-      router.replace("/(auth)/login");
-    }
-  }
+  const [refreshing, setRefreshing] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    omzetToday: 0,
+    productCount: 0,
+    transactionCount: 0,
+  });
 
   // --------------------------
   // STOK MENIPIS
@@ -49,10 +43,13 @@ export default function HomeScreen() {
   const [hasShownAlert, setHasShownAlert] = useState(false);
 
   const fetchLowStock = async () => {
+    if (!session?.user?.id) return;
+
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, stock, min_stock");
+        .select("id, name, stock, min_stock")
+        .eq("user_id", session.user.id); // <-- FILTER BERDASARKAN USER ID
 
       if (error) {
         console.log("Error fetch products:", error);
@@ -77,32 +74,78 @@ export default function HomeScreen() {
   };
 
   // --------------------------
+  // FETCH DATA STATS DASHBOARD
+  // --------------------------
+  const fetchDashboardData = async () => {
+    if (!session?.user?.id) return;
+
+    const userId = session.user.id;
+
+    // 1. Get total product count
+    const { count: productCount, error: productError } = await supabase
+      .from("products")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    // 2. Get today's transactions and omzet
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+    const { data: transactions, error: trxError } = await supabase
+      .from("transactions")
+      .select("total_amount")
+      .eq("user_id", userId)
+      .gte("created_at", startOfDay)
+      .lte("created_at", endOfDay);
+
+    if (productError || trxError) {
+      console.error("Error fetching dashboard data:", productError || trxError);
+      return;
+    }
+
+    const omzetToday = transactions?.reduce(
+      (sum, trx) => sum + trx.total_amount,
+      0
+    ) || 0;
+
+    setDashboardData({
+      productCount: productCount || 0,
+      transactionCount: transactions?.length || 0,
+      omzetToday: omzetToday,
+    });
+  };
+
+  // --------------------------
   // INITIAL LOAD
   // --------------------------
   useEffect(() => {
-    // ambil user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserEmail(user.email || "");
-        setUserName(user.user_metadata?.full_name || "");
+    // Cek sesi saat komponen pertama kali dimuat
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setSession(session);
+        // Langsung fetch data jika sesi sudah ada
+        fetchData(session);
+      } else {
+        setLoading(false);
+        router.replace("/(auth)/login");
       }
     });
 
-    checkSession();
-    fetchLowStock();
-
-    // realtime user session
+    // Listener untuk perubahan state otentikasi (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-        if (session) {
-          setUserEmail(session.user.email || "");
-          setUserName(session.user.user_metadata?.full_name || "");
+        if (!session) {
+          // Jika user logout, kembali ke halaman login
+          router.replace("/(auth)/login");
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // --------------------------
@@ -114,14 +157,28 @@ export default function HomeScreen() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "products" },
-        () => fetchLowStock()
+        (payload) => {
+          console.log("Product change detected, refetching...", payload);
+          // Cukup panggil fetchLowStock karena hanya itu yang terpengaruh
+          if (session) fetchLowStock();
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [session]); // Tambahkan session sebagai dependency
+
+  // Fungsi gabungan untuk mengambil semua data
+  const fetchData = async (currentSession: any) => {
+    if (!currentSession) return;
+    setLoading(true);
+    setUserEmail(currentSession.user.email || "");
+    setUserName(currentSession.user.user_metadata?.full_name || "");
+    await Promise.all([fetchLowStock(), fetchDashboardData()]);
+    setLoading(false);
+  };
 
   // --------------------------
   // ALERT STOK MENIPIS
@@ -147,6 +204,16 @@ export default function HomeScreen() {
       setHasShownAlert(true);
     }
   }, [lowStockItems, hasShownAlert]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Cukup panggil fetchData dengan sesi yang sudah ada
+      if (session) await fetchData(session);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [session]); // Tambahkan session sebagai dependency
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
@@ -185,13 +252,18 @@ export default function HomeScreen() {
   // UI DASHBOARD
   // --------------------------
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white">
       <StatusBar style="dark" />
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
         
         {/* HEADER */}
-        <View className="pt-12 pb-6 px-5 flex-row items-center justify-between">
+        <View className="pt-4 pb-6 px-5 flex-row items-center justify-between">
 
           <View>
             <Text className="text-[11px] text-gray-500">Dashboard POS</Text>
@@ -253,10 +325,10 @@ export default function HomeScreen() {
                   OMZET HARI INI
                 </Text>
                 <Text className="text-[30px] font-bold text-white mt-2">
-                  Rp 3.250.000
+                  Rp {dashboardData.omzetToday.toLocaleString('id-ID')}
                 </Text>
                 <Text className="text-[11px] text-blue-100 mt-1 leading-4">
-                  Total penjualan yang sudah dicatat hari ini.
+                  Total penjualan yang tercatat hari ini.
                 </Text>
               </View>
 
@@ -288,7 +360,7 @@ export default function HomeScreen() {
           <View className="bg-white rounded-2xl px-4 py-3 mr-3 min-w-[140px] border border-gray-200">
             <Text className="text-[11px] text-gray-500">Total Item</Text>
             <Text className="text-lg font-semibold text-blue-600 mt-1">
-              128
+              {dashboardData.productCount}
             </Text>
             <Text className="text-[10px] text-gray-500 mt-1">Produk aktif</Text>
           </View>
@@ -304,7 +376,7 @@ export default function HomeScreen() {
           <View className="bg-white rounded-2xl px-4 py-3 mr-3 min-w-[140px] border border-gray-200">
             <Text className="text-[11px] text-gray-500">Transaksi</Text>
             <Text className="text-lg font-semibold text-green-600 mt-1">
-              12
+              {dashboardData.transactionCount}
             </Text>
             <Text className="text-[10px] text-gray-500 mt-1">Hari ini</Text>
           </View>
@@ -409,6 +481,6 @@ export default function HomeScreen() {
         </View>
 
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
