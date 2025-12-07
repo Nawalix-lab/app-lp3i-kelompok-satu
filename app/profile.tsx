@@ -21,12 +21,12 @@ export default function ProfileScreen() {
 
     const [userEmail, setUserEmail] = useState("");
     const [userName, setUserName] = useState("");
+    const [userStoreName, setUserStoreName] = useState("");
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
 
-    // Gunakan useFocusEffect untuk memuat ulang data setiap kali layar ini menjadi fokus
     useFocusEffect(
         React.useCallback(() => {
             const fetchUser = async () => {
@@ -39,33 +39,28 @@ export default function ProfileScreen() {
                         const metaName = user.user_metadata?.full_name || user.user_metadata?.name || "";
 
                         setUserEmail(email);
-                        // Default nama dari metadata dulu
                         setUserName(metaName);
 
-                        // Ambil data dari tabel 'profiles'
                         const { data: profileData, error } = await supabase
                             .from("profiles")
                             .select("full_name, avatar_url, username")
                             .eq("id", user.id)
                             .single();
 
-                        console.log("DEBUG: Profile Data Fetched:", profileData);
-                        console.log("DEBUG: Fetch Error:", error);
-
                         if (error && error.code !== 'PGRST116') {
                             throw error;
                         }
 
                         if (profileData) {
-                            // Jika ada data di tabel profiles, gunakan itu. Jika full_name null, fallback ke metaName
                             setUserName(profileData.full_name || metaName || "User");
+                            setUserStoreName(profileData.username || "");
                             setAvatarUrl(profileData.avatar_url);
                         }
                     } else {
                         router.replace("/(auth)/login");
                     }
                 } catch (error) {
-                    console.error("Error fetching user:", error);
+                    // Silent error or basic log if needed, but keeping it clean as requested
                 } finally {
                     setLoading(false);
                 }
@@ -80,7 +75,7 @@ export default function ProfileScreen() {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.5, // Mengurangi kualitas untuk ukuran file yang lebih kecil
+            quality: 0.5,
         });
 
         if (!result.canceled) {
@@ -93,15 +88,10 @@ export default function ProfileScreen() {
         if (!userId) return;
         try {
             setUploading(true);
-
-            // 1. Ambil ekstensi file yang benar
             const fileExt = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-
-            // Generate nama file unik dengan timestamp agar tidak kena cache & error 400 strip query param
             const fileName = `${userId}_${new Date().getTime()}.${fileExt}`;
             const filePath = `${fileName}`;
 
-            // 2. Siapkan FormData dengan mime type yang valid
             const formData = new FormData();
             formData.append('file', {
                 uri,
@@ -109,40 +99,29 @@ export default function ProfileScreen() {
                 type: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
             } as any);
 
-            // 3. Upload ke Supabase Storage (bukan upsert/overwrite tapi file baru)
             const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, formData, { upsert: false });
 
-            if (uploadError) {
-                throw uploadError;
-            }
+            if (uploadError) throw uploadError;
 
-            // 4. Ambil Public URL
             const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
             const publicUrl = data.publicUrl;
-
-            // Generate basic username from email if needed
             const usernameFromEmail = userEmail.split('@')[0];
 
-            // 6. Update URL di tabel profiles
             const updates = {
                 id: userId,
                 avatar_url: publicUrl,
                 updated_at: new Date().toISOString(),
                 full_name: userName || "User",
-                username: usernameFromEmail,
+                username: userStoreName || usernameFromEmail,
             };
 
             const { error: upsertError } = await supabase.from('profiles').upsert(updates);
-
             if (upsertError) throw upsertError;
 
-            // 7. Update state lokal
             setAvatarUrl(publicUrl);
-
             Alert.alert("Sukses", "Foto profil berhasil diperbarui!");
 
         } catch (error) {
-            console.error("Upload error:", error);
             Alert.alert("Upload Gagal", (error as Error).message);
         } finally {
             setUploading(false);
@@ -193,7 +172,7 @@ export default function ProfileScreen() {
                     <Ionicons name="arrow-back" size={24} color="#1F2937" />
                 </TouchableOpacity>
                 <Text className="text-lg font-semibold text-gray-900 ml-4">
-                    Profil Pengguna
+                    Profil Toko
                 </Text>
             </View>
 
@@ -201,22 +180,21 @@ export default function ProfileScreen() {
                 <View>
                     {avatarUrl ? (
                         <Image
-                            // Hapus query params jika ada, hanya untuk display aman
                             source={{ uri: avatarUrl.split('?')[0] }}
                             className="h-24 w-24 rounded-full bg-gray-200"
-                            onError={(e) => console.log("Image Load Error:", e.nativeEvent.error)}
-                            onLoad={() => console.log("Image Loaded Success:", avatarUrl)}
                         />
                     ) : (
                         <View className="h-24 w-24 rounded-full bg-blue-100 border-2 border-blue-300 items-center justify-center">
                             <Text className="text-4xl font-bold text-blue-600">{initial}</Text>
                         </View>
                     )}
-                    {/* Camera button removed, moved to edit profile */}
                 </View>
                 <Text className="text-2xl font-bold text-gray-900 mt-3">{userName}</Text>
+                {userStoreName ? (
+                    <Text className="text-sm font-semibold text-blue-600 mt-1">{userStoreName}</Text>
+                ) : null}
                 <Text className="text-sm text-gray-500 mt-1">{userEmail}</Text>
-                
+
                 <TouchableOpacity
                     onPress={() => router.push("/edit-profile")}
                     className="mt-4 bg-gray-900 px-5 py-2.5 rounded-full"
@@ -226,12 +204,12 @@ export default function ProfileScreen() {
             </View>
 
             {/* Menu Aksi */}
-            <View className="px-5 mt-10 space-y-3">
+            <View className="px-5 mt-10">
                 {/* Ubah Password */}
                 <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => router.push("/change-password")}
-                    className="bg-white rounded-2xl p-4 flex-row items-center border border-gray-200"
+                    className="bg-white rounded-2xl p-4 flex-row items-center border border-gray-200 mb-6"
                 >
                     <View className="h-10 w-10 bg-gray-100 rounded-lg items-center justify-center mr-3">
                         <Ionicons name="lock-closed-outline" size={20} color="#374151" />
@@ -246,7 +224,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={openWhatsApp}
-                    className="bg-white rounded-2xl p-4 flex-row items-center border border-gray-200"
+                    className="bg-white rounded-2xl p-4 flex-row items-center border border-gray-200 mb-6"
                 >
                     <View className="h-10 w-10 bg-green-50 rounded-lg items-center justify-center mr-3">
                         <Ionicons name="logo-whatsapp" size={20} color="#10B981" />

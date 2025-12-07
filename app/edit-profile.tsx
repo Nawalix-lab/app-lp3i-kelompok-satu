@@ -216,11 +216,11 @@ export default function EditProfileScreen() {
                 {/* Form Fields */}
                 <View className="space-y-5">
                     <View>
-                        <Text className="text-[13px] font-medium text-gray-700 mb-2">Username</Text>
+                        <Text className="text-[13px] font-medium text-gray-700 mb-2">Nama Toko</Text>
                         <TextInput
                             value={username}
                             onChangeText={setUsername}
-                            placeholder="@username"
+                            placeholder="Nama Toko (Contoh: Toko Berkah)"
                             className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
                         />
                     </View>
