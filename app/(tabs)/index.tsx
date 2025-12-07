@@ -131,7 +131,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 className="bg-white/20 border border-white/40 px-3 py-2 rounded-2xl flex-row items-center"
-                onPress={() => router.push("/transaksi/tambah")}
+                onPress={() => router.push("/kasir")}
               >
                 <Ionicons name="add-circle-outline" size={18} color="#F0F8FF" />
                 <Text className="text-[12px] text-white font-semibold ml-1">Tambah Transaksi</Text>
@@ -242,7 +242,23 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-
+{/* Kalkulator */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push("/kalkulator")}
+            className="flex-row items-center justify-between bg-white rounded-2xl px-4 py-4 mb-3 border border-gray-200"
+          >
+            <View className="flex-row items-center">
+              <View className="h-11 w-11 bg-indigo-50 rounded-2xl items-center justify-center mr-3">
+                <Ionicons name="calculator-outline" size={20} color="#4F46E5" />
+              </View>
+              <View>
+                <Text className="text-[14px] font-semibold text-gray-900">Kalkulator</Text>
+                <Text className="text-[11px] text-gray-500">Hitung cepat</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         {/* FOOTER BOX */}
         <View className="px-5 mt-6">
           <View className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
