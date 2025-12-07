@@ -6,9 +6,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import "../../global.css";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -18,41 +19,48 @@ export default function HomeScreen() {
 
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
-  const [session, setSession] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function checkSession() {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    setLoading(false);
+  // Gunakan useFocusEffect untuk memuat ulang data setiap kali layar ini menjadi fokus
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchAndSetupUser = async () => {
+        setLoading(true);
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const fullName = user.user_metadata?.full_name || "User";
+            setUserEmail(user.email || "");
+            setUserName(fullName);
 
-    if (!data.session) {
-      router.replace("/(auth)/login");
-    }
-  }
+            // Ambil data profil terbaru
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .select("avatar_url")
+              .eq("id", user.id)
+              .single();
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserEmail(user.email || "");
-        setUserName(user.user_metadata?.full_name || "");
-      }
-    });
+            if (profileError) {
+              throw profileError;
+            }
 
-    checkSession();
+            setAvatarUrl(profileData?.avatar_url || null);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        if (session) {
-          setUserEmail(session.user.email || "");
-          setUserName(session.user.user_metadata?.full_name || "");
+          } else {
+            router.replace("/(auth)/login");
+          }
+        } catch (error) {
+          console.error("Error setting up user on home screen:", error);
+          Alert.alert("Error", "Gagal memuat data pengguna.");
+        } finally {
+          setLoading(false);
         }
-      }
-    );
+      };
 
-    return () => subscription.unsubscribe();
-  }, []);
+      fetchAndSetupUser();
+    }, [])
+  );
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
@@ -80,14 +88,12 @@ export default function HomeScreen() {
     );
   }
 
-  if (!session) return null;
-
   return (
     <View className="flex-1 bg-white">
       <StatusBar style="dark" />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        
+
         {/* HEADER */}
         <View className="pt-12 pb-6 px-5 flex-row items-center justify-between">
           <View>
@@ -98,9 +104,17 @@ export default function HomeScreen() {
             <Text className="text-[12px] text-gray-500 mt-1">{userEmail}</Text>
           </View>
 
-          <View className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
-            <Text className="text-lg font-bold text-blue-500">{initial}</Text>
-          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/profile")}
+            className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
+            ) : (
+              <Text className="text-lg font-bold text-blue-500">
+                {initial}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* TAGLINE CARD */}
