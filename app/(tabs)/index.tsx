@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,219 +7,152 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import "../../global.css";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
-// Tipe data produk
-interface Product {
-  id: number;
-  name: string;
-  stock: number;
-  min_stock?: number | null;
-}
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  // State User
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [session, setSession] = useState<any | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState("");
+
+
+  // State Data Dashboard
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dashboardData, setDashboardData] = useState({
-    omzetToday: 0,
-    productCount: 0,
-    transactionCount: 0,
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    lowStock: 0,
+    todayTransactions: 0,
+    todayRevenue: 0,
   });
 
-  // --------------------------
-  // STOK MENIPIS
-  // --------------------------
-  const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
-  const [hasShownAlert, setHasShownAlert] = useState(false);
+  // dipakai untuk indikator icon lonceng
+  const hasLowStock = stats.lowStock > 0;
 
-  const fetchLowStock = async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, stock, min_stock")
-        .eq("user_id", session.user.id); // <-- FILTER BERDASARKAN USER ID
-
-      if (error) {
-        console.log("Error fetch products:", error);
-        return;
-      }
-
-      if (!data) {
-        setLowStockItems([]);
-        return;
-      }
-
-      const filtered = (data as Product[]).filter((item) => {
-        const min = item.min_stock ?? 5;
-        return item.stock <= min;
-      });
-
-      setLowStockItems(filtered);
-      setHasShownAlert(false);
-    } catch (e) {
-      console.log("Unexpected error:", e);
-    }
-  };
-
-  // --------------------------
-  // FETCH DATA STATS DASHBOARD
-  // --------------------------
-  const fetchDashboardData = async () => {
-    if (!session?.user?.id) return;
-
-    const userId = session.user.id;
-
-    // 1. Get total product count
-    const { count: productCount, error: productError } = await supabase
+  async function fetchDashboardData(userId: string) {
+  try {
+    const { data: products, error } = await supabase
       .from("products")
-      .select("*", { count: "exact", head: true })
+      .select("id, stock, price, min_stock")
       .eq("user_id", userId);
 
-    // 2. Get today's transactions and omzet
+    if (error) throw error;
+
+    const totalProds = products?.length || 0;
+    const lowStk =
+      products?.filter((p: any) => (p.stock ?? 0) <= (p.min_stock ?? 5))
+        .length || 0;
+
+    // Ambil transaksi hari ini
     const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString();
 
-    const { data: transactions, error: trxError } = await supabase
-      .from("transactions")
-      .select("total_amount")
+    const { data: movements, error: movError } = await supabase
+      .from("stock_movements")
+      .select("quantity, product_id")
+      .eq("type", "OUT")
       .eq("user_id", userId)
-      .gte("created_at", startOfDay)
-      .lte("created_at", endOfDay);
+      .gte("created_at", todayStr);
 
-    if (productError || trxError) {
-      console.error("Error fetching dashboard data:", productError || trxError);
-      return;
-    }
+    if (movError) throw movError;
 
-    const omzetToday = transactions?.reduce(
-      (sum, trx) => sum + trx.total_amount,
-      0
-    ) || 0;
+    let revenue = 0;
+    const txCount = movements?.length || 0;
 
-    setDashboardData({
-      productCount: productCount || 0,
-      transactionCount: transactions?.length || 0,
-      omzetToday: omzetToday,
-    });
-  };
-
-  // --------------------------
-  // INITIAL LOAD
-  // --------------------------
-  useEffect(() => {
-    // Cek sesi saat komponen pertama kali dimuat
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSession(session);
-        // Langsung fetch data jika sesi sudah ada
-        fetchData(session);
-      } else {
-        setLoading(false);
-        router.replace("/(auth)/login");
-      }
+    movements?.forEach((mov: any) => {
+      const product = products.find((p: any) => p.id === mov.product_id);
+      if (product && product.price) revenue += mov.quantity * product.price;
     });
 
-    // Listener untuk perubahan state otentikasi (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        if (!session) {
-          // Jika user logout, kembali ke halaman login
-          router.replace("/(auth)/login");
-        }
-      }
-    );
+    setStats({
+      totalProducts: totalProds,
+      lowStock: lowStk,
+      todayTransactions: txCount,
+      todayRevenue: revenue,
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard:", error);
+  }
+}
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // --------------------------
-  // REALTIME PRODUCTS
-  // --------------------------
-  useEffect(() => {
-    const channel = supabase
-      .channel("products-low-stock")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        (payload) => {
-          console.log("Product change detected, refetching...", payload);
-          // Cukup panggil fetchLowStock karena hanya itu yang terpengaruh
-          if (session) fetchLowStock();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session]); // Tambahkan session sebagai dependency
-
-  // Fungsi gabungan untuk mengambil semua data
-  const fetchData = async (currentSession: any) => {
-    if (!currentSession) return;
+const fetchUserAndStats = async () => {
     setLoading(true);
-    setUserEmail(currentSession.user.email || "");
-    setUserName(currentSession.user.user_metadata?.full_name || "");
-    await Promise.all([fetchLowStock(), fetchDashboardData()]);
-    setLoading(false);
-  };
-
-  // --------------------------
-  // ALERT STOK MENIPIS
-  // --------------------------
-  useEffect(() => {
-    if (!hasShownAlert && lowStockItems.length > 0) {
-      const names = lowStockItems
-        .slice(0, 5)
-        .map((p) => `${p.name} (sisa ${p.stock})`)
-        .join(", ");
-
-      const extra =
-        lowStockItems.length > 5
-          ? `, dan ${lowStockItems.length - 5} produk lain`
-          : "";
-
-      Alert.alert(
-        "Stok Menipis",
-        `${names}${extra} stoknya sudah di bawah batas minimal. Segera restock ya.`,
-        [{ text: "OK" }]
-      );
-
-      setHasShownAlert(true);
-    }
-  }, [lowStockItems, hasShownAlert]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
     try {
-      // Cukup panggil fetchData dengan sesi yang sudah ada
-      if (session) await fetchData(session);
+      // Ambil session
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+      const user = data.session?.user;
+      
+      if (!user) {
+        router.replace("/(auth)/login");
+        return;
+      }
+
+      const fullName = user.user_metadata?.full_name || "User";
+      setUserName(fullName);
+      setUserEmail(user.email || "");
+
+      // 2. MODIFIKASI BAGIAN INI (Query Profile & Cek Toko)
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("avatar_url, store_name") // <--- Tambahkan store_name di sini
+        .eq("id", user.id)
+        .single();
+
+      if (!profileError) {
+        setAvatarUrl(profileData?.avatar_url || null);
+
+        // LOGIKA PENGECEKAN:
+        // Jika store_name kosong/null, lempar ke halaman setup
+        if (!profileData?.store_name) {
+           router.replace("/store-setup"); 
+           return; // Hentikan proses agar dashboard tidak lanjut loading
+        }
+
+        // Jika ada, simpan ke state
+        setStoreName(profileData.store_name);
+      }
+
+      // Ambil data produk & transaksi
+      await fetchDashboardData(user.id);
+
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
-  }, [session]); // Tambahkan session sebagai dependency
+  };
+
+  // 1. Cek Session User
+  useFocusEffect(
+  React.useCallback(() => {
+    fetchUserAndStats();
+  }, [])
+);
+
+
+  // Refresh function
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Cukup panggil fetchUserAndStats karena sudah menangani semuanya
+    fetchUserAndStats();
+  }, []); // Tidak perlu dependensi karena fetchUserAndStats selalu mengambil data terbaru
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
-  // --------------------------
-  // LOGOUT
-  // --------------------------
   function signOut() {
     Alert.alert("Keluar Akun", "Yakin ingin keluar dari kaStok?", [
       { text: "Batal", style: "cancel" },
@@ -234,253 +167,256 @@ export default function HomeScreen() {
     ]);
   }
 
-  // --------------------------
-  // LOADING
-  // --------------------------
-  if (loading) {
+  if (!session && loading) {
     return (
       <View className="flex-1 bg-white justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="mt-2 text-gray-500">Memuat data pengguna...</Text>
       </View>
     );
   }
 
-  if (!session) return null;
-
-  // --------------------------
-  // UI DASHBOARD
-  // --------------------------
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-gray-50">
+    
       <StatusBar style="dark" />
 
-      <ScrollView 
-        className="flex-1" 
+      <ScrollView
+        className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }>
-        
-        {/* HEADER */}
-        <View className="pt-4 pb-6 px-5 flex-row items-center justify-between">
-
+        }
+      >
+        {/* HEADER PROFILE */}
+        <View className="bg-white pt-10 pb-6 px-5 flex-row items-center justify-between border-b border-gray-100 shadow-sm mb-4">
+          {/* kiri: teks */}
           <View>
-            <Text className="text-[11px] text-gray-500">Dashboard POS</Text>
-            <Text className="text-xl font-semibold text-gray-900 mt-1">
-              Hai, {userName || "User"} 👋
+            <Text className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {storeName ? storeName : "Dashboard Owner"} 
             </Text>
-            <Text className="text-[12px] text-gray-500 mt-1">{userEmail}</Text>
+            <Text className="text-xl font-bold text-gray-900 mt-1">
+              Hai, {userName || "Boss"} 👋
+            </Text>
           </View>
 
+          {/* kanan: lonceng + avatar */}
           <View className="flex-row items-center">
+            {/* icon lonceng bulat merah muda */}
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)/notifikasi")}
+              className="mr-3"
+              activeOpacity={0.7}
+            >
+      <View className="h-10 w-10 rounded-full bg-red-50 items-center justify-center relative">
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color="#E11D48"
+                />
+                {/* titik merah kecil kalau ada stok menipis */}
+                {hasLowStock && (
+                  <View className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-red-500 border border-white" />
+                )}
+              </View>
+            </TouchableOpacity>
 
-            {/* ICON NOTIFIKASI */}
-            <View className="mr-3 relative">
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => router.push("/notifikasi")}
-                className="h-10 w-10 rounded-full bg-red-50 items-center justify-center"
-              >
-                <Ionicons name="notifications-outline" size={20} color="#E11D48" />
-              </TouchableOpacity>
-
-              {lowStockItems.length > 0 && (
-                <View className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-red-500 items-center justify-center">
-                  <Text className="text-[9px] text-white font-semibold">
-                    {lowStockItems.length > 9 ? "9+" : lowStockItems.length}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* AVATAR */}
-            <View className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
-              <Text className="text-lg font-bold text-blue-500">{initial}</Text>
-            </View>
-
+            {/* avatar / inisial */}
+            <TouchableOpacity
+            onPress={() => router.push("/(tabs)/profile")}
+            className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
+            ) : (
+              <Text className="text-lg font-bold text-blue-500">
+                {initial}
+              </Text>
+            )}
+          </TouchableOpacity>
           </View>
         </View>
 
-        {/* TAGLINE CARD */}
-        <View className="px-5 mb-3">
-          <View className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-            <Text className="text-lg font-bold text-gray-900">
-              kaStok - Aplikasi Manajemen Stok
-            </Text>
-            <Text className="text-gray-600 text-[13px] mt-2 leading-5">
-              Kelola inventori dan stok barang Anda dengan mudah dan efisien.
-              Pantau ketersediaan, catat transaksi, dan dapatkan laporan
-              lengkap.
-            </Text>
-          </View>
-        </View>
+        {/* CARD OMZET */}
+        <View className="px-5 mb-6">
+          <View className="bg-blue-600 rounded-3xl p-6 shadow-lg shadow-blue-200 relative overflow-hidden">
+            {/* Background Decoration */}
+            <View className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/30 rounded-full" />
+            <View className="absolute -left-4 -bottom-4 w-24 h-24 bg-blue-500/20 rounded-full" />
 
-        {/* OMZET CARD */}
-        <View className="px-5">
-          <View className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-3xl p-5 shadow">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-4">
-                <Text className="text-[12px] text-blue-100 font-semibold">
+            <View className="flex-row items-center justify-between mb-4">
+              <View className="bg-blue-500/40 px-3 py-1 rounded-full">
+                <Text className="text-[10px] text-white font-bold tracking-widest">
                   OMZET HARI INI
                 </Text>
-                <Text className="text-[30px] font-bold text-white mt-2">
-                  Rp {dashboardData.omzetToday.toLocaleString('id-ID')}
-                </Text>
-                <Text className="text-[11px] text-blue-100 mt-1 leading-4">
-                  Total penjualan yang tercatat hari ini.
-                </Text>
               </View>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                className="bg-white/20 border border-white/40 px-3 py-2 rounded-2xl flex-row items-center"
-                onPress={() => router.push("/transaksi/tambah")}
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={18}
-                  color="#F0F8FF"
-                />
-                <Text className="text-[12px] text-white font-semibold ml-1">
-                  Tambah Transaksi
-                </Text>
-              </TouchableOpacity>
+              <MaterialCommunityIcons
+                name="finance"
+                size={24}
+                color="white"
+                style={{ opacity: 0.8 }}
+              />
             </View>
+
+            <Text className="text-4xl font-bold text-white mb-2">
+              Rp {stats.todayRevenue.toLocaleString("id-ID")}
+            </Text>
+
+            <Text className="text-blue-100 text-xs leading-4 mb-4">
+              Total pendapatan kotor dari transaksi penjualan yang tercatat hari
+              ini.
+            </Text>
+
+            {/* Tombol Kasir */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              className="bg-white px-4 py-3 rounded-xl flex-row items-center justify-center"
+              onPress={() => router.push("/(tabs)/kasir")}
+            >
+              <Ionicons name="cart-outline" size={20} color="#2563EB" />
+              <Text className="text-blue-700 font-bold ml-2">
+                Buka Kasir / Jual
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* STATS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-4"
-          contentContainerStyle={{ paddingHorizontal: 20 }}
-        >
-          <View className="bg-white rounded-2xl px-4 py-3 mr-3 min-w-[140px] border border-gray-200">
-            <Text className="text-[11px] text-gray-500">Total Item</Text>
-            <Text className="text-lg font-semibold text-blue-600 mt-1">
-              {dashboardData.productCount}
+        {/* STATS GRID */}
+        <View className="px-5 flex-row gap-3 mb-8">
+          {/* Card Total Item */}
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/stok")}
+            className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center"
+          >
+            <View className="w-10 h-10 bg-indigo-50 rounded-full items-center justify-center mb-2">
+              <MaterialCommunityIcons
+                name="package-variant"
+                size={22}
+                color="#4F46E5"
+              />
+            </View>
+            <Text className="text-2xl font-bold text-gray-900">
+              {stats.totalProducts}
             </Text>
-            <Text className="text-[10px] text-gray-500 mt-1">Produk aktif</Text>
-          </View>
+            <Text className="text-xs text-gray-500">Total Produk</Text>
+          </TouchableOpacity>
 
-          <View className="bg-white rounded-2xl px-4 py-3 mr-3 min-w-[140px] border border-gray-200">
-            <Text className="text-[11px] text-gray-500">Stok Menipis</Text>
-            <Text className="text-lg font-semibold text-red-500 mt-1">
-              {lowStockItems.length} Item
+          {/* Card Stok Menipis */}
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/notifikasi")}
+            className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center"
+          >
+            <View className="w-10 h-10 bg-orange-50 rounded-full items-center justify-center mb-2">
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={22}
+                color="#EA580C"
+              />
+            </View>
+            <Text
+              className={`text-2xl font-bold ${
+                stats.lowStock > 0 ? "text-orange-600" : "text-gray-900"
+              }`}
+            >
+              {stats.lowStock}
             </Text>
-            <Text className="text-[10px] text-gray-500 mt-1">Perlu restock</Text>
-          </View>
+            <Text className="text-xs text-gray-500">Stok Menipis</Text>
+          </TouchableOpacity>
 
-          <View className="bg-white rounded-2xl px-4 py-3 mr-3 min-w-[140px] border border-gray-200">
-            <Text className="text-[11px] text-gray-500">Transaksi</Text>
-            <Text className="text-lg font-semibold text-green-600 mt-1">
-              {dashboardData.transactionCount}
+          {/* Card Transaksi */}
+          <View className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center">
+            <View className="w-10 h-10 bg-green-50 rounded-full items-center justify-center mb-2">
+              <MaterialCommunityIcons
+                name="receipt"
+                size={22}
+                color="#16A34A"
+              />
+            </View>
+            <Text className="text-2xl font-bold text-gray-900">
+              {stats.todayTransactions}
             </Text>
-            <Text className="text-[10px] text-gray-500 mt-1">Hari ini</Text>
+            <Text className="text-xs text-gray-500">Trx Hari Ini</Text>
           </View>
-        </ScrollView>
+        </View>
 
         {/* MENU UTAMA */}
-        <View className="px-5 mt-8">
-          <Text className="text-[11px] text-gray-500 tracking-wide mb-3">
-            MENU UTAMA
+        <View className="px-5">
+          <Text className="text-xs font-bold text-gray-400 tracking-widest mb-4 uppercase">
+            Menu Aplikasi
           </Text>
 
-          {/* Stok */}
+          {/* Stok Barang */}
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push("/stok")}
-            className="flex-row items-center justify-between bg-white rounded-2xl px-4 py-4 mb-3 border border-gray-200"
+            activeOpacity={0.7}
+            onPress={() => router.push("/(tabs)/stok")}
+            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
           >
-            <View className="flex-row items-center">
-              <View className="h-11 w-11 bg-blue-50 rounded-2xl items-center justify-center mr-3">
-                <MaterialCommunityIcons
-                  name="cube-outline"
-                  size={22}
-                  color="#2563EB"
-                />
-              </View>
-              <View>
-                <Text className="text-[14px] font-semibold text-gray-900">
-                  Stok Barang
-                </Text>
-                <Text className="text-[11px] text-gray-500">
-                  Kelola & perbarui stok
-                </Text>
-              </View>
+            <View className="h-12 w-12 bg-blue-50 rounded-2xl items-center justify-center mr-4">
+              <MaterialCommunityIcons
+                name="cube-outline"
+                size={24}
+                color="#2563EB"
+              />
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900">
+                Stok Barang
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                Input stok masuk, edit & hapus barang
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
           </TouchableOpacity>
 
           {/* Laporan */}
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push("/laporan")}
-            className="flex-row items-center justify-between bg-white rounded-2xl px-4 py-4 mb-3 border border-gray-200"
+            activeOpacity={0.7}
+            onPress={() => router.push("/(tabs)/laporan")}
+            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
           >
-            <View className="flex-row items-center">
-              <View className="h-11 w-11 bg-green-50 rounded-2xl items-center justify-center mr-3">
-                <Ionicons name="stats-chart" size={20} color="#059669" />
-              </View>
-              <View>
-                <Text className="text-[14px] font-semibold text-gray-900">
-                  Laporan
-                </Text>
-                <Text className="text-[11px] text-gray-500">
-                  Grafik & riwayat
-                </Text>
-              </View>
+            <View className="h-12 w-12 bg-purple-50 rounded-2xl items-center justify-center mr-4">
+              <Ionicons name="stats-chart" size={24} color="#9333EA" />
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900">
+                Laporan Keuangan
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                Lihat grafik profit & pengeluaran
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
           </TouchableOpacity>
 
           {/* Pengaturan */}
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push("/pengaturan")}
-            className="flex-row items-center justify-between bg-white rounded-2xl px-4 py-4 mb-3 border border-gray-200"
+            activeOpacity={0.7}
+            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
           >
-            <View className="flex-row items-center">
-              <View className="h-11 w-11 bg-yellow-50 rounded-2xl items-center justify-center mr-3">
-                <Ionicons name="settings-outline" size={20} color="#D97706" />
-              </View>
-              <View>
-                <Text className="text-[14px] font-semibold text-gray-900">
-                  Pengaturan
-                </Text>
-                <Text className="text-[11px] text-gray-500">
-                  Konfigurasi app
-                </Text>
-              </View>
+            <View className="h-12 w-12 bg-gray-50 rounded-2xl items-center justify-center mr-4">
+              <Ionicons name="settings-outline" size={24} color="#4B5563" />
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900">
+                Pengaturan
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                Profil toko & akun
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
           </TouchableOpacity>
         </View>
 
-        {/* FOOTER BOX */}
-        <View className="px-5 mt-6">
-          <View className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
-            <Text className="text-[11px] text-gray-500 leading-4">
-              Pastikan semua transaksi kasir tercatat agar laporan penjualan dan
-              stok selalu akurat.
-            </Text>
-          </View>
-        </View>
-
-        <View className="px-5 mt-6">
-          <TouchableOpacity
-            onPress={signOut}
-            className="mt-4 bg-red-500 p-4 rounded-xl"
-          >
-            <Text className="text-center text-white font-semibold">
-              Keluar Akun
+        {/* LOGOUT */}
+        <View className="px-5 mt-6 mb-10">
+          <TouchableOpacity onPress={signOut} className="py-4 items-center">
+            <Text className="text-red-500 font-semibold text-sm">
+              Keluar dari Akun
             </Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
+    
     </SafeAreaView>
   );
 }
