@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Image,
   ScrollView,
@@ -12,10 +11,11 @@ import {
   Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useRouter, useNavigation } from "expo-router";
+import { useRouter } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import Toast from "react-native-toast-message";
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -92,7 +92,13 @@ export default function EditProfileScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Izin Ditolak", "Akses galeri diperlukan.");
+      Toast.show({
+        type: "error",
+        text1: "Izin Ditolak",
+        text2: "Akses galeri diperlukan.",
+        position: "top",
+        visibilityTime: 3000,
+      });
       return;
     }
 
@@ -101,6 +107,8 @@ export default function EditProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
+      base64: false,
+      exif: false,
     });
 
     if (!result.canceled) {
@@ -110,7 +118,7 @@ export default function EditProfileScreen() {
 
 
   // ----------------------------------------------------------
-  // UPLOAD AVATAR (FIX remove lama langsung)
+  // UPLOAD AVATAR (Android Compatible)
   // ----------------------------------------------------------
   const uploadAvatar = async (uri: string) => {
     if (!userId) return;
@@ -125,12 +133,22 @@ export default function EditProfileScreen() {
 
       const fileName = `${userId}_${Date.now()}.jpg`;
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      // Untuk Android, gunakan FormData
+      const formData = new FormData();
+      
+      // @ts-ignore - FormData append file untuk React Native
+      formData.append('file', {
+        uri: uri,
+        type: 'image/jpeg',
+        name: fileName,
+      });
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, blob, { contentType: "image/jpeg" });
+        .upload(fileName, formData, { 
+          contentType: "image/jpeg",
+          upsert: false 
+        });
 
       if (uploadError) throw uploadError;
 
@@ -155,8 +173,22 @@ export default function EditProfileScreen() {
 
       if (dbError) throw dbError;
 
+      Toast.show({
+        type: "success",
+        text1: "Berhasil",
+        text2: "Foto profil berhasil diperbarui",
+        position: "top",
+        visibilityTime: 2000,
+      });
+
     } catch (err) {
-      Alert.alert("Upload Gagal", (err as Error).message);
+      Toast.show({
+        type: "error",
+        text1: "Upload Gagal",
+        text2: (err as Error).message,
+        position: "top",
+        visibilityTime: 3000,
+      });
     } finally {
       setUploading(false);
     }
@@ -187,12 +219,29 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
-      Alert.alert("Berhasil", "Profil berhasil diperbarui", [
-        { text: "OK", onPress: () => router.push("/(tabs)/profile") }
-      ]);
+      setSaving(false);
+
+      Toast.show({
+        type: "success",
+        text1: "Berhasil",
+        text2: "Profil berhasil diperbarui",
+        position: "top",
+        visibilityTime: 2000,
+      });
+
+      // Navigate to profile index after short delay
+      setTimeout(() => {
+        router.push("/(tabs)/profile");
+      }, 500);
 
     } catch (err) {
-      Alert.alert("Gagal", (err as Error).message);
+      Toast.show({
+        type: "error",
+        text1: "Gagal",
+        text2: (err as Error).message,
+        position: "top",
+        visibilityTime: 3000,
+      });
     } finally {
       setSaving(false);
     }
@@ -327,6 +376,7 @@ export default function EditProfileScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      <Toast />
     </KeyboardAvoidingView>
   );
 }

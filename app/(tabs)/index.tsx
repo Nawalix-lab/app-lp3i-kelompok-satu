@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import "../../global.css";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -89,11 +90,7 @@ export default function HomeScreen() {
   }
 }
 
-
-  // 1. Cek Session User
-  useFocusEffect(
-  React.useCallback(() => {
-    const fetchUserAndStats = async () => {
+const fetchUserAndStats = async () => {
       setLoading(true);
       try {
         // Ambil session
@@ -128,6 +125,9 @@ export default function HomeScreen() {
       }
     };
 
+  // 1. Cek Session User
+  useFocusEffect(
+  React.useCallback(() => {
     fetchUserAndStats();
   }, [])
 );
@@ -136,8 +136,9 @@ export default function HomeScreen() {
 // Refresh function
 const onRefresh = React.useCallback(() => {
   setRefreshing(true);
-  if (user) fetchUserAndStats();
-}, [user]);
+  fetchUserAndStats();
+}, []);
+
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
@@ -164,7 +165,8 @@ const onRefresh = React.useCallback(() => {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-gray-50">
+    
       <StatusBar style="dark" />
 
       <ScrollView
@@ -175,7 +177,7 @@ const onRefresh = React.useCallback(() => {
         }
       >
         {/* HEADER PROFILE */}
-        <View className="bg-white pt-14 pb-6 px-5 flex-row items-center justify-between border-b border-gray-100 shadow-sm mb-4">
+        <View className="bg-white pt-10 pb-6 px-5 flex-row items-center justify-between border-b border-gray-100 shadow-sm mb-4">
           {/* kiri: teks */}
           <View>
             <Text className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -403,6 +405,7 @@ const onRefresh = React.useCallback(() => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    
+    </SafeAreaView>
   );
 }
