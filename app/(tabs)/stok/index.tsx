@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, TouchableOpacity, FlatList, TextInput, RefreshControl, Modal, ScrollView, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -6,38 +6,77 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase"; 
 import "../../../global.css";
 
+
+type Product = {
+  id: number;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  unit: string;
+  description?: string;
+  user_id: string;
+};
+
 export default function StokScreen() {
   const router = useRouter();
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("Semua");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<Product | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  
+  // Ambil user saat komponen mount
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    };
+
+    getUser();
+  }, []);
+
 
   const fetchProducts = async () => {
-    try {
-      let query = supabase.from('products').select('*').order('name', { ascending: true });
-      if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
-      const { data, error } = await query;
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!user) return; // jangan fetch kalau user belum ada
+  try {
+    setLoading(true);
 
-  useFocusEffect(useCallback(() => { fetchProducts(); }, [searchQuery]));
+    let query: any = supabase
+      .from('products')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name', { ascending: true });
+
+    if (searchQuery) {
+      query = query.ilike('name', `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    setProducts(data || []);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  useFocusEffect(useCallback(() => {
+  if (user) fetchProducts();
+}, [user, searchQuery]));
 
   const filteredProducts = products.filter(item => {
     if (filterCategory === "Semua") return true;
     return item.category === filterCategory;
   });
 
-  // --- PERBAIKAN LOGIKA DELETE ---
-  const handleDelete = (item) => {
+  const handleDelete = (item: Product) => {
     Alert.alert(
       "Hapus Produk",
       `Yakin ingin menghapus "${item.name}"? Semua riwayat stok produk ini juga akan terhapus.`,
@@ -68,18 +107,20 @@ export default function StokScreen() {
     );
   };
 
-  const handleEdit = (item) => {
+  const handleEdit = (item: Product) => {
     router.push({ pathname: "/(tabs)/stok/edit", params: { id: item.id } });
   };
 
-  const getCategoryColor = (cat) => {
+  type Category = "Makanan" | "Minuman" | "Snack" | "Lain-lain";
+
+  const getCategoryColor = (cat: Category | string) => {
     if (cat === 'Makanan') return { bg: 'bg-orange-100', text: 'text-orange-700' };
     if (cat === 'Minuman') return { bg: 'bg-blue-100', text: 'text-blue-700' };
     if (cat === 'Snack') return { bg: 'bg-pink-100', text: 'text-pink-700' };
     return { bg: 'bg-purple-100', text: 'text-purple-700' };
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item } :  { item: Product }) => {
     const colors = getCategoryColor(item.category);
     return (
       <TouchableOpacity 
@@ -160,7 +201,14 @@ export default function StokScreen() {
         renderItem={renderItem}
         contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchProducts} />}
-        ListEmptyComponent={!loading && <View className="mt-10 items-center"><Text className="text-gray-400">Data kosong</Text></View>}
+        ListEmptyComponent={
+  !loading ? (
+    <View className="mt-10 items-center">
+      <Text className="text-gray-400">Data kosong</Text>
+    </View>
+  ) : null
+}
+
       />
 
       {/* DETAIL MODAL (Updated dengan Profit) */}

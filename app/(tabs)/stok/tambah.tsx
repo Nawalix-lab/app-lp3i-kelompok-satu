@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet, Button } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ export default function TambahProdukScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   // Kamera
   const [permission, requestPermission] = useCameraPermissions();
@@ -28,6 +29,18 @@ export default function TambahProdukScreen() {
   const [description, setDescription] = useState("");
   const [initialStock, setInitialStock] = useState("");
 
+
+  useEffect(() => {
+  const getUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    setUser(data.user);
+  };
+
+  getUser();
+}, []);
+
+
+  // --- FUNGSI SCAN BARCODE ---
   const handleScanPress = async () => {
     if (!permission?.granted) {
       const { granted } = await requestPermission();
@@ -49,6 +62,11 @@ export default function TambahProdukScreen() {
     setLoading(true);
 
     try {
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+    if (userError || !currentUser) {
+      throw new Error("User belum login atau gagal mengambil data user!");
+    }
+
       if (sku) {
         const { data: existing } = await supabase.from('products').select('id').eq('sku', sku).single();
         if (existing) {
@@ -69,9 +87,11 @@ export default function TambahProdukScreen() {
           price: parseInt(price) || 0,        // Simpan Harga Jual
           stock: parseInt(initialStock) || 0,
           category,
-          description
+          description,
+          user_id: currentUser.id, 
         })
         .select()
+        .eq('user_id', currentUser.id)
         .single();
 
       if (error) throw error;
