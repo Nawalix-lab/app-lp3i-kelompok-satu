@@ -1,4 +1,3 @@
-// app/(tabs)/notifikasi.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -20,33 +19,41 @@ interface Product {
   min_stock?: number | null;
 }
 
-export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export default`
+export default function NotifikasiScreen() {   // ⬅️ HARUS ada export default
   const router = useRouter();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
   const fetchLowStock = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, stock, min_stock");
+  try {
+    setLoading(true);
 
-      if (error) {
-        console.log(error);
-        return;
-      }
+    // Ambil user saat ini
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) return;
 
-      const filtered = (data as Product[]).filter((item) => {
-        const min = item.min_stock ?? 5;
-        return item.stock <= min;
-      });
+    // Ambil produk user ini saja
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, stock, min_stock")
+      .eq("user_id", currentUser.id);  // filter per user
 
-      setItems(filtered);
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.log(error);
+      return;
     }
-  };
+
+    const filtered = (data as Product[]).filter((item) => {
+      const min = item.min_stock ?? 5;
+      return item.stock <= min;
+    });
+
+    setItems(filtered);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchLowStock();
