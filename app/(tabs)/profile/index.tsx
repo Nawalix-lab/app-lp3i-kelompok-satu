@@ -42,7 +42,7 @@ export default function ProfileScreen() {
 
             const { data: profileData, error } = await supabase
               .from("profiles")
-              .select("full_name, avatar_url, username")
+              .select("full_name, avatar_url, store_name")
               .eq("id", user.id)
               .single();
 
@@ -52,7 +52,7 @@ export default function ProfileScreen() {
 
             if (profileData) {
               setUserName(profileData.full_name || metaName || "User");
-              setUserStoreName(profileData.username || "");
+              setUserStoreName(profileData.store_name || "");
               setAvatarUrl(profileData.avatar_url);
             }
           } else {
@@ -135,10 +135,10 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
-        <Text className="text-2xl font-bold text-gray-900 mt-3">{userName}</Text>
-        {/* {userStoreName ? (
+        {/* <Text className="text-2xl font-bold text-gray-900 mt-3">{userName}</Text> */}
+        {userStoreName ? (
           <Text className="text-2xl font-bold text-gray-900 mt-3">{userStoreName}</Text>
-        ) : null} */}
+        ) : null}
         <Text className="text-sm text-gray-500 mt-1">{userEmail}</Text>
 
         <TouchableOpacity

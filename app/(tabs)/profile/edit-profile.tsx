@@ -72,7 +72,7 @@ export default function EditProfileScreen() {
           setOldAvatarPath(filePath);
         }
 
-        setUsername(profileData.username || "");
+        setUsername(profileData.store_name || "");
         setFullName(profileData.full_name || metaName);
         setWebsite(profileData.website || "");
         setPhoneNumber(profileData.phone_number || "");
