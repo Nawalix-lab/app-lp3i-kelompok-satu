@@ -1,4 +1,3 @@
-// app/(tabs)/notifikasi.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -20,7 +19,7 @@ interface Product {
   min_stock?: number | null;
 }
 
-export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export default`
+export default function NotifikasiScreen() {   // ⬅️ HARUS ada export default
   const router = useRouter();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
