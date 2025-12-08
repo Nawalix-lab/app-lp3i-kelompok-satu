@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -20,8 +21,12 @@ export default function HomeScreen() {
   // State User
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
+  
   const [session, setSession] = useState<any | null>(null);
   const userId = session?.user?.id;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [user, setUser] = useState<any | null>(null);
+
 
 
   // State Data Dashboard
@@ -37,42 +42,21 @@ export default function HomeScreen() {
   // dipakai untuk indikator icon lonceng
   const hasLowStock = stats.lowStock > 0;
 
-  // 1. Cek Session User
-  async function checkSession() {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    if (data.session) {
-      setUserEmail(data.session.user.email || "");
-      setUserName(data.session.user.user_metadata?.full_name || "");
-      fetchDashboardData(data.session.user.id);
-    } else {
-      router.replace("/(auth)/login");
-    }
-  }
-
-  // 2. Ambil Data Statistik dari Database
   async function fetchDashboardData(userId: string) {
-  if (!userId) return; // jangan jalanin kalau userId belum ada
-
   try {
-    // A. Ambil Data Produk (Total Item & Stok Menipis)
-    const { data: products, error: prodError } = await supabase
+    const { data: products, error } = await supabase
       .from("products")
-      .select("id, stock, price, min_stock") // ← pindahkan select sebelum eq
+      .select("id, stock, price, min_stock")
       .eq("user_id", userId);
 
-    if (prodError) throw prodError;
+    if (error) throw error;
 
     const totalProds = products?.length || 0;
-
-    // Stok menipis jika stock <= min_stock (default 5)
     const lowStk =
-      products?.filter((p: any) => {
-        const min = p.min_stock ?? 5;
-        return (p.stock ?? 0) <= min;
-      }).length || 0;
+      products?.filter((p: any) => (p.stock ?? 0) <= (p.min_stock ?? 5))
+        .length || 0;
 
-    // B. Ambil Transaksi Hari Ini (Untuk Omzet)
+    // Ambil transaksi hari ini
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString();
@@ -86,18 +70,13 @@ export default function HomeScreen() {
 
     if (movError) throw movError;
 
-    // C. Hitung Omzet (Jumlah Keluar * Harga Produk)
     let revenue = 0;
-    let txCount = movements?.length || 0;
+    const txCount = movements?.length || 0;
 
-    if (movements && products) {
-      movements.forEach((mov: any) => {
-        const product = products.find((p: any) => p.id === mov.product_id);
-        if (product && product.price) {
-          revenue += mov.quantity * product.price;
-        }
-      });
-    }
+    movements?.forEach((mov: any) => {
+      const product = products.find((p: any) => p.id === mov.product_id);
+      if (product && product.price) revenue += mov.quantity * product.price;
+    });
 
     setStats({
       totalProducts: totalProds,
@@ -107,24 +86,58 @@ export default function HomeScreen() {
     });
   } catch (error) {
     console.error("Error fetching dashboard:", error);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
   }
 }
 
 
-  // Effect: Jalankan saat halaman dibuka
+  // 1. Cek Session User
   useFocusEffect(
-    useCallback(() => {
-      checkSession();
-    }, [])
-  );
+  React.useCallback(() => {
+    const fetchUserAndStats = async () => {
+      setLoading(true);
+      try {
+        // Ambil session
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session); // <--- set session
+        const user = data.session?.user;
+        if (!user) {
+          router.replace("/(auth)/login");
+          return;
+        }
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchDashboardData(userId);
-  }, []);
+        const fullName = user.user_metadata?.full_name || "User";
+        setUserName(fullName);
+        setUserEmail(user.email || "");
+
+        // Ambil avatar
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", user.id)
+          .single();
+        if (!profileError) setAvatarUrl(profileData?.avatar_url || null);
+
+        // Ambil data produk & transaksi
+        await fetchDashboardData(user.id);
+
+      } catch (error) {
+        console.error("Error fetching dashboard:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    fetchUserAndStats();
+  }, [])
+);
+
+
+// Refresh function
+const onRefresh = React.useCallback(() => {
+  setRefreshing(true);
+  if (user) fetchUserAndStats();
+}, [user]);
 
   const initial = (userName || "U").charAt(0).toUpperCase();
 
@@ -196,11 +209,16 @@ export default function HomeScreen() {
 
             {/* avatar / inisial */}
             <TouchableOpacity
-              onPress={signOut}
-              className="h-10 w-10 rounded-full bg-blue-50 border border-blue-100 items-center justify-center"
-            >
-              <Text className="text-lg font-bold text-blue-600">{initial}</Text>
-            </TouchableOpacity>
+            onPress={() => router.push("/profile")}
+            className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
+            ) : (
+              <Text className="text-lg font-bold text-blue-500">
+                {initial}
+              </Text>
+            )}
+          </TouchableOpacity>
           </View>
         </View>
 
