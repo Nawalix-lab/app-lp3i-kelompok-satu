@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -30,6 +31,17 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "babel-preset-expo": "^54.0.8",
+    "eslint": "^8.57.1",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-native": "^5.0.0",
+    "stylelint": "^16.26.1",
+    "stylelint-config-recommended-scss": "^16.0.2",
+    "stylelint-config-recommended-vue": "^1.6.1",
+    "stylelint-config-standard": "^39.0.1",
+    "stylelint-config-tailwindcss": "^1.0.0",
     "typescript": "~5.9.2"
   },
   "private": true

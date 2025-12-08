@@ -1,0 +1,12 @@
+// .vscode/settings.json
+{
+    // Ini adalah pengaturan penting yang memberi tahu VS Code untuk mengabaikan
+    // aturan CSS yang tidak dikenal (@tailwind, @apply, dll.).
+    "css.lint.unknownAtRules": "ignore",
+
+    // Opsional: Untuk memastikan VS Code menggunakan ekstensi Tailwind IntelliSense 
+    // pada file CSS Anda.
+    "files.associations": {
+        "*.css": "tailwindcss" 
+    }
+}

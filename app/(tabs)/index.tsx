@@ -21,6 +21,8 @@ export default function HomeScreen() {
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [session, setSession] = useState<any | null>(null);
+  const userId = session?.user?.id;
+
 
   // State Data Dashboard
   const [loading, setLoading] = useState(true);
@@ -42,82 +44,86 @@ export default function HomeScreen() {
     if (data.session) {
       setUserEmail(data.session.user.email || "");
       setUserName(data.session.user.user_metadata?.full_name || "");
+      fetchDashboardData(data.session.user.id);
     } else {
       router.replace("/(auth)/login");
     }
   }
 
   // 2. Ambil Data Statistik dari Database
-  async function fetchDashboardData() {
-    try {
-      // A. Ambil Data Produk (Total Item & Stok Menipis)
-      const { data: products, error: prodError } = await supabase
-        .from("products")
-        .select("id, stock, price, min_stock");
+  async function fetchDashboardData(userId: string) {
+  if (!userId) return; // jangan jalanin kalau userId belum ada
 
-      if (prodError) throw prodError;
+  try {
+    // A. Ambil Data Produk (Total Item & Stok Menipis)
+    const { data: products, error: prodError } = await supabase
+      .from("products")
+      .select("id, stock, price, min_stock") // ← pindahkan select sebelum eq
+      .eq("user_id", userId);
 
-      const totalProds = products?.length || 0;
+    if (prodError) throw prodError;
 
-      // SAMAKAN LOGIKA DENGAN HALAMAN NOTIFIKASI:
-      // stok menipis jika stock <= min_stock (default min_stock = 5)
-      const lowStk =
-        products?.filter((p: any) => {
-          const min = p.min_stock ?? 5;
-          return (p.stock ?? 0) <= min;
-        }).length || 0;
+    const totalProds = products?.length || 0;
 
-      // B. Ambil Transaksi Hari Ini (Untuk Omzet)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString();
+    // Stok menipis jika stock <= min_stock (default 5)
+    const lowStk =
+      products?.filter((p: any) => {
+        const min = p.min_stock ?? 5;
+        return (p.stock ?? 0) <= min;
+      }).length || 0;
 
-      const { data: movements, error: movError } = await supabase
-        .from("stock_movements")
-        .select("quantity, product_id")
-        .eq("type", "OUT")
-        .gte("created_at", todayStr);
+    // B. Ambil Transaksi Hari Ini (Untuk Omzet)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString();
 
-      if (movError) throw movError;
+    const { data: movements, error: movError } = await supabase
+      .from("stock_movements")
+      .select("quantity, product_id")
+      .eq("type", "OUT")
+      .eq("user_id", userId)
+      .gte("created_at", todayStr);
 
-      // C. Hitung Omzet (Jumlah Keluar * Harga Produk)
-      let revenue = 0;
-      let txCount = movements?.length || 0;
+    if (movError) throw movError;
 
-      if (movements && products) {
-        movements.forEach((mov: any) => {
-          const product = products.find((p: any) => p.id === mov.product_id);
-          if (product && product.price) {
-            revenue += mov.quantity * product.price;
-          }
-        });
-      }
+    // C. Hitung Omzet (Jumlah Keluar * Harga Produk)
+    let revenue = 0;
+    let txCount = movements?.length || 0;
 
-      setStats({
-        totalProducts: totalProds,
-        lowStock: lowStk,
-        todayTransactions: txCount,
-        todayRevenue: revenue,
+    if (movements && products) {
+      movements.forEach((mov: any) => {
+        const product = products.find((p: any) => p.id === mov.product_id);
+        if (product && product.price) {
+          revenue += mov.quantity * product.price;
+        }
       });
-    } catch (error) {
-      console.error("Error fetching dashboard:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
+
+    setStats({
+      totalProducts: totalProds,
+      lowStock: lowStk,
+      todayTransactions: txCount,
+      todayRevenue: revenue,
+    });
+  } catch (error) {
+    console.error("Error fetching dashboard:", error);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
   }
+}
+
 
   // Effect: Jalankan saat halaman dibuka
   useFocusEffect(
     useCallback(() => {
       checkSession();
-      fetchDashboardData();
     }, [])
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchDashboardData();
+    fetchDashboardData(userId);
   }, []);
 
   const initial = (userName || "U").charAt(0).toUpperCase();
@@ -175,7 +181,7 @@ export default function HomeScreen() {
               className="mr-3"
               activeOpacity={0.7}
             >
-              <View className="h-10 w-10 rounded-full bg-red-50 items-center justify-center relative">
+      <View className="h-10 w-10 rounded-full bg-red-50 items-center justify-center relative">
                 <Ionicons
                   name="notifications-outline"
                   size={20}
