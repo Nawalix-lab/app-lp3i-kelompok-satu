@@ -10,8 +10,8 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../lib/supabase";
-import "../global.css";
+import { supabase } from "../../../lib/supabase";
+import "../../../global.css";
 
 export default function ChangePasswordScreen() {
     const navigation = useNavigation();

@@ -11,6 +11,25 @@ export default function AppLayout() {
 
       {/* Halaman Stok */}
       <Stack.Screen
+        name="profile/index"
+        options={{ headerShown: false }}
+      />
+
+      <Stack.Screen
+        name="profile/edit-profile"
+        options={{ headerShown: false, headerBackTitleVisible: false}}
+      />
+
+      <Stack.Screen
+        name="profile/change-password"
+        options={{
+          title: 'Tambah Produk ',
+          headerBackTitleVisible: false,
+          headerShown: false
+        }}
+      />
+
+      <Stack.Screen
         name="stok/index"
         options={{ headerShown: false }}
       />

@@ -209,7 +209,7 @@ const onRefresh = React.useCallback(() => {
 
             {/* avatar / inisial */}
             <TouchableOpacity
-            onPress={() => router.push("/profile")}
+            onPress={() => router.push("/(tabs)/profile")}
             className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
