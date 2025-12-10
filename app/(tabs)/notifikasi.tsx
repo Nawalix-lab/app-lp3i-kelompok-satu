@@ -1,5 +1,5 @@
 // app/(tabs)/notifikasi.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase"; // ⬅️ penting
+import { supabase } from "../../lib/supabase";
 import "../../global.css";
 
 interface Product {
@@ -20,17 +20,34 @@ interface Product {
   min_stock?: number | null;
 }
 
-export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export default`
+export default function NotifikasiScreen() {
   const router = useRouter();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [session, setSession] = useState<any>(null);
+
+  // Ambil session user
+  useFocusEffect(
+    useCallback(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (!session) {
+          router.replace("/(auth)/login");
+        }
+      });
+    }, [])
+  );
 
   const fetchLowStock = async () => {
+    if (!session?.user?.id) return;
+
     try {
       setLoading(true);
+
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, stock, min_stock");
+        .select("id, name, stock, min_stock")
+        .eq("user_id", session.user.id); // <-- FILTER PER USER ID
 
       if (error) {
         console.log(error);
@@ -38,7 +55,7 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
       }
 
       const filtered = (data as Product[]).filter((item) => {
-        const min = item.min_stock ?? 5;
+        const min = item.min_stock ?? 5; // default minimal stok
         return item.stock <= min;
       });
 
@@ -48,9 +65,10 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada `export defau
     }
   };
 
+  // Re-fetch setiap session siap
   useEffect(() => {
-    fetchLowStock();
-  }, []);
+    if (session) fetchLowStock();
+  }, [session]);
 
   return (
     <View className="flex-1 bg-white">

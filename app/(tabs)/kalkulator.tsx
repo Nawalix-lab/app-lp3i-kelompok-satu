@@ -8,110 +8,92 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import "../../global.css"; // Sesuaikan jika path global.css berbeda
+import "../../global.css";
 
 export default function KalkulatorScreen() {
   const [display, setDisplay] = useState("0");
-  const [currentValue, setCurrentValue] = useState("0");
-  const [operator, setOperator] = useState(null);
+  const [firstOperand, setFirstOperand] = useState<number | null>(null);
+  const [operator, setOperator] = useState<string | null>(null);
   const [waitingForOperand, setWaitingForOperand] = useState(false);
 
-  // Fungsi untuk menangani input angka
+  // === HANDLE INPUT DIGIT ===
   const handleInputDigit = (digit: string) => {
     if (waitingForOperand) {
       setDisplay(digit);
-      setCurrentValue(digit);
       setWaitingForOperand(false);
     } else {
-      if (currentValue === "0") {
-        setDisplay(digit);
-        setCurrentValue(digit);
-      } else {
-        setDisplay(currentValue + digit);
-        setCurrentValue(currentValue + digit);
-      }
+      setDisplay(display === "0" ? digit : display + digit);
     }
   };
 
-  // Fungsi untuk menangani input desimal
+  // === DECIMAL ===
   const handleInputDecimal = () => {
     if (waitingForOperand) {
       setDisplay("0.");
-      setCurrentValue("0.");
       setWaitingForOperand(false);
-    } else if (!currentValue.includes(".")) {
-      setDisplay(currentValue + ".");
-      setCurrentValue(currentValue + ".");
+      return;
+    }
+    if (!display.includes(".")) {
+      setDisplay(display + ".");
     }
   };
 
-  // Fungsi untuk membersihkan (Clear All)
+  // === CLEAR ===
   const handleClear = () => {
     setDisplay("0");
-    setCurrentValue("0");
+    setFirstOperand(null);
     setOperator(null);
     setWaitingForOperand(false);
   };
 
-  // Fungsi untuk menghapus satu digit (Backspace)
+  // === BACKSPACE ===
   const handleBackspace = () => {
+    if (waitingForOperand) return;
     if (display.length > 1) {
-      const newDisplay = display.slice(0, -1);
-      setDisplay(newDisplay);
-      setCurrentValue(newDisplay);
+      setDisplay(display.slice(0, -1));
     } else {
       setDisplay("0");
-      setCurrentValue("0");
     }
   };
 
-  // Fungsi untuk menangani operasi matematika
+  // === PERFORM OPERATION ===
   const performOperation = (nextOperator: string) => {
-    const inputValue = parseFloat(currentValue);
+    const inputValue = parseFloat(display);
 
-    if (operator && !waitingForOperand) {
-      // Hitung hasil operasi sebelumnya
-      const prevValue = parseFloat(display); // Untuk menghindari double perhitungan jika currentValue sudah diubah
-
-      let result = prevValue;
+    if (firstOperand == null) {
+      setFirstOperand(inputValue);
+    } else if (operator) {
+      let result = firstOperand;
 
       switch (operator) {
         case "+":
-          result = parseFloat(currentValue) + parseFloat(display);
+          result = firstOperand + inputValue;
           break;
         case "-":
-          result = parseFloat(display) - parseFloat(currentValue);
+          result = firstOperand - inputValue;
           break;
         case "*":
-          result = parseFloat(display) * parseFloat(currentValue);
+          result = firstOperand * inputValue;
           break;
         case "/":
-          if (parseFloat(currentValue) === 0) {
-            Alert.alert("Error", "Pembagian dengan nol tidak diizinkan.");
+          if (inputValue === 0) {
+            Alert.alert("Error", "Tidak bisa membagi dengan 0");
             handleClear();
             return;
           }
-          result = parseFloat(display) / parseFloat(currentValue);
-          break;
-        default:
+          result = firstOperand / inputValue;
           break;
       }
-      
-      const resultString = result.toString();
-      setDisplay(resultString);
-      setCurrentValue(resultString);
+
+      setDisplay(String(result));
+      setFirstOperand(result);
     }
-    
-    // Set operator berikutnya
-    setWaitingForOperand(true);
+
     setOperator(nextOperator === "=" ? null : nextOperator);
-    // Jika operator bukan '=', simpan nilai display saat ini sebagai operand pertama
-    if (nextOperator !== "=") {
-        setCurrentValue(display);
-    }
+    setWaitingForOperand(true);
   };
-  
-  // Fungsi untuk membuat tombol
+
+  // === UI BUTTON ===
   const renderButton = (
     label: string,
     onPress: () => void,
@@ -136,9 +118,7 @@ export default function KalkulatorScreen() {
         <Text className="text-xl font-semibold text-gray-900">
           <Ionicons name="calculator-outline" size={24} color="#3B82F6" /> Kalkulator POS
         </Text>
-        <Text className="text-xs text-gray-500 mt-1">
-            Alat bantu hitung cepat
-        </Text>
+        <Text className="text-xs text-gray-500 mt-1">Alat bantu hitung cepat</Text>
       </View>
 
       {/* DISPLAY */}
@@ -154,6 +134,7 @@ export default function KalkulatorScreen() {
 
       {/* KEYPAD */}
       <View className="p-3 bg-white">
+
         {/* Row 1 */}
         <View className="flex-row justify-between">
           <TouchableOpacity
@@ -164,6 +145,7 @@ export default function KalkulatorScreen() {
           >
             <Text className="text-3xl font-light text-red-600">AC</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleBackspace}
@@ -172,6 +154,7 @@ export default function KalkulatorScreen() {
           >
             <Ionicons name="backspace-outline" size={30} color="#1F2937" />
           </TouchableOpacity>
+
           {renderButton("÷", () => performOperation("/"), "bg-blue-500")}
           {renderButton("×", () => performOperation("*"), "bg-blue-500")}
         </View>
@@ -224,13 +207,12 @@ export default function KalkulatorScreen() {
   );
 }
 
-// Tambahkan StyleSheet untuk tinggi tombol agar layout lebih rapi dan konsisten
 const styles = StyleSheet.create({
   button: {
-    aspectRatio: 1, // Membuat tombol menjadi persegi
-    height: 70, // Sesuaikan tinggi sesuai keinginan
+    aspectRatio: 1,
+    height: 70,
   },
   equalsButton: {
-    height: 148, // Kira-kira dua kali tinggi tombol lain
+    height: 148,
   },
 });

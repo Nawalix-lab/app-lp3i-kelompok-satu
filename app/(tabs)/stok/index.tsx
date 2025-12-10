@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, TouchableOpacity, FlatList, TextInput, RefreshControl, Modal, ScrollView, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -14,11 +14,20 @@ export default function StokScreen() {
   const [filterCategory, setFilterCategory] = useState("Semua");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
 
   const fetchProducts = async () => {
+    if (!session?.user?.id) return;
+
     try {
-      let query = supabase.from('products').select('*').order('name', { ascending: true });
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', session.user.id) // <-- FILTER BERDASARKAN USER ID
+        .order('name', { ascending: true });
+
       if (searchQuery) query = query.ilike('name', `%${searchQuery}%`);
+
       const { data, error } = await query;
       if (error) throw error;
       setProducts(data || []);
@@ -29,7 +38,21 @@ export default function StokScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchProducts(); }, [searchQuery]));
+  useFocusEffect(useCallback(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) {
+        router.replace('/(auth)/login');
+      }
+    });
+  }, []));
+
+  // Re-fetch when search query or session changes
+  useEffect(() => {
+    if (session) {
+      fetchProducts();
+    }
+  }, [searchQuery, session]);
 
   const filteredProducts = products.filter(item => {
     if (filterCategory === "Semua") return true;

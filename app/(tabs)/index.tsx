@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
     View,
     Text,
@@ -123,22 +123,19 @@ export default function HomeScreen() {
 
     // --- LOGIKA DATA DAN OTORISASI (SAMA DENGAN SEBELUMNYA) ---
 
-    async function checkSession() {
-        const { data } = await supabase.auth.getSession();
-        setSession(data.session);
-        if (data.session) {
-            setUserEmail(data.session.user.email || "");
-            setUserName(data.session.user.user_metadata?.full_name || "");
-        } else {
-            router.replace("/(auth)/login");
-        }
-    }
-
     async function fetchDashboardData() {
+        if (!session?.user?.id) {
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
+        const userId = session.user.id;
+
         try {
             const { data: products, error: prodError } = await supabase
                 .from("products")
-                .select("id, stock, price, min_stock");
+                .select("id, stock, price, min_stock")
+                .eq("user_id", userId);
 
             if (prodError) throw prodError;
 
@@ -153,32 +150,29 @@ export default function HomeScreen() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toISOString();
+            const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
 
-            const { data: movements, error: movError } = await supabase
-                .from("stock_movements")
-                .select("quantity, product_id")
-                .eq("type", "OUT")
-                .gte("created_at", todayStr);
+            // Mengambil data dari tabel 'transactions' untuk omzet dan jumlah transaksi
+            const { data: transactions, error: trxError } = await supabase
+                .from("transactions")
+                .select("total_amount")
+                .eq("user_id", userId)
+                .gte("created_at", todayStr)
+                .lte("created_at", endOfDay);
 
-            if (movError) throw movError;
+            if (trxError) throw trxError;
 
-            let revenue = 0;
-            let txCount = 0; 
-
-            if (movements && products) {
-                txCount = movements.length; 
-                movements.forEach((mov: any) => {
-                    const product = products.find((p: any) => p.id === mov.product_id);
-                    if (product && product.price) {
-                        revenue += mov.quantity * product.price;
-                    }
-                });
-            }
+            // Menghitung total omzet dari transaksi hari ini
+            const revenue =
+                transactions?.reduce(
+                    (sum, trx) => sum + trx.total_amount,
+                    0
+                ) || 0;
 
             setStats({
                 totalProducts: totalProds,
                 lowStock: lowStk,
-                todayTransactions: txCount,
+                todayTransactions: transactions?.length || 0,
                 todayRevenue: revenue,
             });
         } catch (error) {
@@ -191,15 +185,24 @@ export default function HomeScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            checkSession();
-            fetchDashboardData();
+            const fetchDataOnFocus = async () => {
+                const { data: { session: currentSession } } = await supabase.auth.getSession();
+                setSession(currentSession);
+
+                if (currentSession) {
+                    setUserEmail(currentSession.user.email || "");
+                    setUserName(currentSession.user.user_metadata?.full_name || "");
+                } else {
+                    router.replace("/(auth)/login");
+                }
+            };
+            fetchDataOnFocus();
         }, [])
     );
 
-    const onRefresh = useCallback(() => {
-        setRefreshing(true);
-        fetchDashboardData();
-    }, []);
+    useEffect(() => {
+        if (session) fetchDashboardData();
+    }, [session]);
 
     const initial = (userName || "U").charAt(0).toUpperCase();
 
@@ -234,7 +237,7 @@ export default function HomeScreen() {
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 32 }}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    <RefreshControl refreshing={refreshing} onRefresh={fetchDashboardData} />
                 }
             >
                 {/* HEADER PROFILE */}
