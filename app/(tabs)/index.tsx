@@ -13,6 +13,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  StyleSheet
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -26,8 +27,10 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const FAB_SIZE = 56;
 const FAB_MARGIN = 24;
 
+
+
 export default function HomeScreen() {
-  const router = useRouter();
+    const router = useRouter();
 
   // ====================== USER STATE ===========================
   const [session, setSession] = useState<any | null>(null);
@@ -422,3 +425,22 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+// Tambahkan StyleSheet untuk Android shadow (elevation)
+const styles = StyleSheet.create({
+    draggableContainer: {
+        position: 'absolute',
+        // Nilai awal posisi telah diatur di pan.current
+        // Kita gunakan zIndex agar FAB selalu di atas elemen lain
+        zIndex: 1000, 
+    },
+    fabShadow: {
+        // Shadow untuk iOS
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4.65,
+        // Elevation untuk Android
+        elevation: 8,
+    },
+});

@@ -44,6 +44,15 @@ export default function AppLayout() {
       />
 
       <Stack.Screen
+        name="kasir/index"
+        options={{
+          title: 'Tambah Produk ',
+          headerBackTitleVisible: false,
+          headerShown: false
+        }}
+      />
+
+      <Stack.Screen
         name="stok/masuk"
         options={{
           title: 'Barang Masuk',

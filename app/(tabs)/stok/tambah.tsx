@@ -61,64 +61,72 @@ export default function TambahProdukScreen() {
   };
 
   async function handleSave() {
-    if (!name) return alert("Nama barang wajib diisi!");
-    
-    setLoading(true);
+  if (!name) return alert("Nama barang wajib diisi!");    
+  if (!user?.id) return alert("Sesi pengguna tidak ditemukan, silakan login ulang.");
 
-    try {
-      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+  setLoading(true);
+
+  try {
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
     if (userError || !currentUser) {
       throw new Error("User belum login atau gagal mengambil data user!");
     }
 
-      if (sku) {
-        const { data: existing } = await supabase.from('products').select('id').eq('sku', sku).single();
-        if (existing) {
-          alert("Kode Barang (SKU) sudah digunakan.");
-          setLoading(false);
-          return;
-        }
-      }
-
-      const stockVal = parseInt(initialStock) || 0;
-      const priceVal = parseInt(price) || 0;
-
-      const { data: newProduct, error: productError } = await supabase
+    if (sku) {
+      const { data: existing } = await supabase
         .from('products')
-        .insert({
-          name,
-          sku: sku || null,
-          barcode: barcode || null,
-          unit,
-          price: priceVal,
-          stock: stockVal,
-          category,
-          description,
-          user_id: currentUser.id, 
-        })
-        .select()
+        .select('id')
+        .eq('sku', sku)
         .eq('user_id', currentUser.id)
         .single();
 
-      if (productError) throw productError;
-
-      if (stockVal > 0 && newProduct) {
-        await supabase.from('stock_movements').insert({
-          product_id: newProduct.id,
-          type: 'IN',
-          quantity: stockVal,
-          notes: 'Stok Awal',
-        });
+      if (existing) {
+        alert("Kode Barang (SKU) sudah digunakan.");
+        setLoading(false);
+        return;
       }
-
-      setLoading(false);
-      setShowSuccess(true);
-
-    } catch (error: any) {
-      alert(error.message);
-      setLoading(false);
     }
+
+    const stockVal = parseInt(initialStock) || 0;
+    const priceVal = parseInt(price) || 0;
+
+    const { data: newProduct, error: productError } = await supabase
+      .from('products')
+      .insert({
+        name,
+        sku: sku || null,
+        barcode: barcode || null,
+        unit,
+        price: priceVal,
+        stock: stockVal,
+        category,
+        description,
+        user_id: currentUser.id,
+      })
+      .select()
+      .single();
+
+    if (productError) throw productError;
+
+    if (stockVal > 0 && newProduct) {
+      await supabase.from('stock_movements').insert({
+        product_id: newProduct.id,
+        type: 'IN',
+        quantity: stockVal,
+        notes: 'Stok Awal',
+        user_id: currentUser.id,
+      });
+    }
+
+    setLoading(false);
+    setShowSuccess(true);
+
+  } catch (error: any) {
+    alert(error.message);
+    setLoading(false);
   }
+}
+
 
   const handleSuccessConfirm = () => {
     setShowSuccess(false);

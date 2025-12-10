@@ -28,7 +28,7 @@ export default function EditProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [oldAvatarPath, setOldAvatarPath] = useState<string | null>(null);
 
-  const [username, setUsername] = useState("");
+ const [storeName, setStoreName] = useState("");
   const [fullName, setFullName] = useState("");
   const [website, setWebsite] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -72,7 +72,7 @@ export default function EditProfileScreen() {
           setOldAvatarPath(filePath);
         }
 
-        setUsername(profileData.store_name || "");
+        setStoreName(profileData.store_name || "");
         setFullName(profileData.full_name || metaName);
         setWebsite(profileData.website || "");
         setPhoneNumber(profileData.phone_number || "");
@@ -204,7 +204,7 @@ export default function EditProfileScreen() {
 
     try {
       const updates = {
-        username,
+        store_name:storeName,
         full_name: fullName,
         website,
         phone_number: phoneNumber,
@@ -319,8 +319,8 @@ export default function EditProfileScreen() {
           <View>
             <Text className="text-[13px] font-medium text-gray-700 mb-2">Nama Toko</Text>
             <TextInput
-              value={username}
-              onChangeText={setUsername}
+              value={storeName}
+              onChangeText={setStoreName}
               placeholder="Nama Toko"
               className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
             />

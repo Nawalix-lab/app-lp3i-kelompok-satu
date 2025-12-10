@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,9 +7,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { supabase } from "../../lib/supabase"; // ⬅️ penting
+import { supabase } from "../../lib/supabase";
 import "../../global.css";
 
 interface Product {
@@ -23,6 +23,19 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada export defaul
   const router = useRouter();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [session, setSession] = useState<any>(null);
+
+  // Ambil session user
+  useFocusEffect(
+    useCallback(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (!session) {
+          router.replace("/(auth)/login");
+        }
+      });
+    }, [])
+  );
 
   const fetchLowStock = async () => {
   try {
@@ -55,9 +68,10 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada export defaul
 };
 
 
+  // Re-fetch setiap session siap
   useEffect(() => {
-    fetchLowStock();
-  }, []);
+    if (session) fetchLowStock();
+  }, [session]);
 
   return (
     <View className="flex-1 bg-white">
