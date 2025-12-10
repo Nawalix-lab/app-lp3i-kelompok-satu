@@ -9,6 +9,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -17,21 +18,26 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import Toast from "react-native-toast-message";
 
+import { useColorScheme } from "nativewind";
+
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [stableTimestamp] = useState(Date.now());
   const [oldAvatarPath, setOldAvatarPath] = useState<string | null>(null);
 
  const [storeName, setStoreName] = useState("");
   const [fullName, setFullName] = useState("");
   const [website, setWebsite] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [address, setAddress] = useState("");
 
   // ----------------------------------------------------------
   // LOAD USER
@@ -76,6 +82,7 @@ export default function EditProfileScreen() {
         setFullName(profileData.full_name || metaName);
         setWebsite(profileData.website || "");
         setPhoneNumber(profileData.phone_number || "");
+        setAddress(profileData.address || "");
 
       } else {
         setFullName(metaName);
@@ -112,103 +119,72 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled) {
-      await uploadAvatar(result.assets[0].uri);
+      setSelectedImage(result.assets[0]);
     }
   };
 
 
   // ----------------------------------------------------------
-  // UPLOAD AVATAR (Android Compatible)
+  // SAVE PROFILE (With Confirmation & Logic)
   // ----------------------------------------------------------
-  const uploadAvatar = async (uri: string) => {
-    if (!userId) return;
-
-    try {
-      setUploading(true);
-
-      // Hapus avatar lama di storage
-      if (oldAvatarPath) {
-        await supabase.storage.from("avatars").remove([oldAvatarPath]);
-      }
-
-      const fileName = `${userId}_${Date.now()}.jpg`;
-
-      // Untuk Android, gunakan FormData
-      const formData = new FormData();
-      
-      // @ts-ignore - FormData append file untuk React Native
-      formData.append('file', {
-        uri: uri,
-        type: 'image/jpeg',
-        name: fileName,
-      });
-
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, formData, { 
-          contentType: "image/jpeg",
-          upsert: false 
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(fileName);
-
-      const publicUrl = data.publicUrl;
-
-      // Update tampilan
-      setAvatarUrl(publicUrl);
-      setOldAvatarPath(fileName); // update path baru
-
-      // Simpan ke DB
-      const { error: dbError } = await supabase
-        .from("profiles")
-        .update({
-          avatar_url: publicUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId);
-
-      if (dbError) throw dbError;
-
-      Toast.show({
-        type: "success",
-        text1: "Berhasil",
-        text2: "Foto profil berhasil diperbarui",
-        position: "top",
-        visibilityTime: 2000,
-      });
-
-    } catch (err) {
-      Toast.show({
-        type: "error",
-        text1: "Upload Gagal",
-        text2: (err as Error).message,
-        position: "top",
-        visibilityTime: 3000,
-      });
-    } finally {
-      setUploading(false);
-    }
+  const confirmSave = () => {
+    Alert.alert(
+      "Konfirmasi Perubahan",
+      "Apakah Anda yakin ingin menyimpan perubahan profil?",
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Ya, Simpan", onPress: executeSave }
+      ]
+    );
   };
 
-
-  // ----------------------------------------------------------
-  // SAVE PROFILE
-  // ----------------------------------------------------------
-  const handleSave = async () => {
+  const executeSave = async () => {
     if (!userId) return;
     setSaving(true);
 
     try {
+      let finalAvatarUrl = avatarUrl; // Default to existing
+
+      // 1. Upload Photo if Changed
+      if (selectedImage) {
+        // Remove old avatar if exists
+        if (oldAvatarPath) {
+          await supabase.storage.from("avatars").remove([oldAvatarPath]);
+        }
+
+        const fileName = `${userId}_${Date.now()}.jpg`;
+        const formData = new FormData();
+        // @ts-ignore
+        formData.append('file', {
+          uri: selectedImage.uri,
+          type: 'image/jpeg',
+          name: fileName,
+        });
+
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(fileName, formData, {
+            contentType: "image/jpeg",
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(fileName);
+
+        finalAvatarUrl = data.publicUrl;
+      }
+
+      // 2. Update Profile Text Data
       const updates = {
         store_name:storeName,
         full_name: fullName,
         website,
         phone_number: phoneNumber,
-        avatar_url: avatarUrl,
+        address: address,
+        avatar_url: finalAvatarUrl,
         updated_at: new Date().toISOString(),
       };
 
@@ -219,8 +195,6 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
-      setSaving(false);
-
       Toast.show({
         type: "success",
         text1: "Berhasil",
@@ -229,18 +203,18 @@ export default function EditProfileScreen() {
         visibilityTime: 2000,
       });
 
-      // Navigate to profile index after short delay
+      // Kembali ke halaman profil
       setTimeout(() => {
-        router.push("/(tabs)/profile");
-      }, 500);
+        router.back();
+      }, 1000);
 
     } catch (err) {
       Toast.show({
         type: "error",
-        text1: "Gagal",
+        text1: "Gagal Menyimpan",
         text2: (err as Error).message,
         position: "top",
-        visibilityTime: 3000,
+        visibilityTime: 4000,
       });
     } finally {
       setSaving(false);
@@ -261,16 +235,16 @@ export default function EditProfileScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-white"
+      className="flex-1 bg-white dark:bg-gray-900"
     >
-      <StatusBar style="dark" />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       {/* HEADER */}
-      <View className="bg-white pt-12 pb-4 px-4 flex-row items-center border-b border-gray-100">
+      <View className="bg-white dark:bg-gray-800 pt-12 pb-4 px-4 flex-row items-center border-b border-gray-100 dark:border-gray-700">
         <TouchableOpacity onPress={() => router.back()} className="p-2">
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#FFFFFF' : '#1F2937'} />
         </TouchableOpacity>
-        <Text className="text-lg font-semibold text-gray-900 ml-4">
+        <Text className="text-lg font-semibold text-gray-900 dark:text-white ml-4">
           Edit Profil
         </Text>
       </View>
@@ -280,13 +254,14 @@ export default function EditProfileScreen() {
         {/* AVATAR */}
         <View className="items-center mb-8">
           <View className="relative">
-            {avatarUrl ? (
+            {selectedImage || avatarUrl ? (
               <Image
-                source={{ uri: avatarUrl + "?t=" + Date.now() }}
-                className="h-28 w-28 rounded-full bg-gray-100 border border-gray-200"
+                source={{ uri: selectedImage ? selectedImage.uri : (avatarUrl ? `${avatarUrl}?t=${stableTimestamp}` : undefined) }}
+                className="h-28 w-28 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                resizeMode="cover"
               />
             ) : (
-              <View className="h-28 w-28 rounded-full bg-blue-50 border border-blue-100 items-center justify-center">
+              <View className="h-28 w-28 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 items-center justify-center">
                 <Text className="text-4xl font-bold text-blue-500">
                   {(fullName || "U").charAt(0).toUpperCase()}
                 </Text>
@@ -295,19 +270,15 @@ export default function EditProfileScreen() {
 
             <TouchableOpacity
               onPress={pickImage}
-              disabled={uploading}
+              disabled={saving}
               className="absolute bottom-0 right-0 bg-blue-600 p-2.5 rounded-full border-2 border-white shadow-sm"
             >
-              {uploading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="camera" size={18} color="white" />
-              )}
+              <Ionicons name="camera" size={18} color="white" />
             </TouchableOpacity>
           </View>
 
           <Text
-            className="text-sm text-blue-600 font-medium mt-3"
+            className="text-sm text-blue-600 dark:text-blue-400 font-medium mt-3"
             onPress={pickImage}
           >
             Ubah Foto Profil
@@ -317,55 +288,72 @@ export default function EditProfileScreen() {
         {/* FORM */}
         <View className="space-y-5">
           <View>
-            <Text className="text-[13px] font-medium text-gray-700 mb-2">Nama Toko</Text>
+            <Text className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-2">Nama Toko</Text>
             <TextInput
               value={storeName}
               onChangeText={setStoreName}
               placeholder="Nama Toko"
-              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-white"
             />
           </View>
 
           <View>
-            <Text className="text-[13px] font-medium text-gray-700 mb-2">Nama Lengkap</Text>
+            <Text className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-2">Nama Lengkap</Text>
             <TextInput
               value={fullName}
               onChangeText={setFullName}
               placeholder="Nama Lengkap"
-              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-white"
             />
           </View>
 
           <View>
-            <Text className="text-[13px] font-medium text-gray-700 mb-2">Website</Text>
+            <Text className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-2">Website</Text>
             <TextInput
               value={website}
               onChangeText={setWebsite}
               placeholder="https://website.com"
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
               autoCapitalize="none"
-              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-white"
             />
           </View>
 
           <View>
-            <Text className="text-[13px] font-medium text-gray-700 mb-2">Nomor HP</Text>
+            <Text className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-2">Nomor HP</Text>
             <TextInput
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               placeholder="08xxxxxxxx"
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
               keyboardType="phone-pad"
-              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800"
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-white"
+            />
+          </View>
+
+          <View>
+            <Text className="text-[13px] font-medium text-gray-700 dark:text-gray-300 mb-2">Alamat Lengkap</Text>
+            <TextInput
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Alamat Lengkap"
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
+              multiline={true}
+              numberOfLines={3}
+              textAlignVertical="top"
+              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-800 dark:text-white min-h-[80px]"
             />
           </View>
         </View>
 
         {/* SAVE */}
         <TouchableOpacity
-          onPress={handleSave}
+          onPress={confirmSave}
           disabled={saving}
-          className={`mt-10 rounded-2xl py-4 items-center justify-center ${
-            saving ? "bg-blue-400" : "bg-blue-600"
-          } shadow-sm`}
+          className={`mt-10 rounded-2xl py-4 items-center justify-center ${saving ? "bg-blue-400" : "bg-blue-600 dark:bg-blue-700"
+            } shadow-sm`}
         >
           {saving ? (
             <ActivityIndicator color="white" />

@@ -13,7 +13,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  StyleSheet
+  StyleSheet,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";

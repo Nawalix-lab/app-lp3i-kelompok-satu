@@ -16,7 +16,44 @@
     price: number;
     barcode?: string;
     description?: string;
-    user_id: string;
+    user_id: string;}
+    
+export default function BarangMasukScreen() {
+  const router = useRouter();
+  
+  // State Form
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [quantity, setQuantity] = useState("");
+  const [notes, setNotes] = useState("");
+  
+  // State Data & UI
+  const [products, setProducts] = useState([]);
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
+  
+  // Modals
+  const [modalVisible, setModalVisible] = useState(false); // Modal cari manual
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [session, setSession] = useState<any>(null);
+
+  // Camera State
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchProducts(session.user.id);
+      }
+    });
+  }, []);
+
+  const fetchProducts = async (userId: string) => {
+    if (!userId) return;
+    const { data } = await supabase.from('products').select('*').eq('user_id', userId).order('name');
+    if (data) setProducts(data);
   };
 
   export default function BarangMasukScreen() {
@@ -47,24 +84,10 @@
     }, []);
 
     const fetchProducts = async () => {
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-
-  if (!user) return;
-
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("name");
-
-  if (error) {
-    console.log("Error fetch:", error);
-  }
-
-  if (data) setProducts(data);
-};
-
+      const currentUser = supabase.auth.getUser();
+      const { data } = await supabase.from('products').select('*').eq('user_id', currentUser?.id).order('name');
+      if (data) setProducts(data);
+    };
 
     // --- LOGIKA SCAN BARCODE UNTUK CARI PRODUK ---
     const handleScanPress = async () => {
@@ -160,73 +183,7 @@
                     {selectedProduct ? selectedProduct.name : "Cari manual..."}
                   </Text>
                   {selectedProduct && (
-                    <Text className="text-xs text-blue-600 mt-1">Stok saat ini: {async function handleSave() {
-  if (!name) return alert("Nama barang wajib diisi!");    
-  if (!user?.id) return alert("Sesi pengguna tidak ditemukan, silakan login ulang.");
-
-  setLoading(true);
-
-  try {
-    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-    if (userError || !currentUser) {
-      throw new Error("User belum login atau gagal mengambil data user!");
-    }
-
-    if (sku) {
-      const { data: existing } = await supabase
-        .from('products')
-        .select('id')
-        .eq('sku', sku)
-        .eq('user_id', currentUser.id)
-        .single();
-
-      if (existing) {
-        alert("Kode Barang (SKU) sudah digunakan.");
-        setLoading(false);
-        return;
-      }
-    }
-
-    const stockVal = parseInt(initialStock) || 0;
-    const priceVal = parseInt(price) || 0;
-
-    const { data: newProduct, error: productError } = await supabase
-      .from('products')
-      .insert({
-        name,
-        sku: sku || null,
-        barcode: barcode || null,
-        unit,
-        price: priceVal,
-        stock: stockVal,
-        category,
-        description,
-        user_id: currentUser.id,
-      })
-      .select()
-      .single();
-
-    if (productError) throw productError;
-
-    if (stockVal > 0 && newProduct) {
-      await supabase.from('stock_movements').insert({
-        product_id: newProduct.id,
-        type: 'IN',
-        quantity: stockVal,
-        notes: 'Stok Awal',
-        user_id: currentUser.id,
-      });
-    }
-
-    setLoading(false);
-    setShowSuccess(true);
-
-  } catch (error: any) {
-    alert(error.message);
-    setLoading(false);
-  }
-}
-.stock}</Text>
+                    <Text className="text-xs text-blue-600 mt-1">Stok saat ini: {selectedProduct.stock}</Text>
                   )}
                 </View>
                 <Ionicons name="chevron-down" size={20} color="#6B7280" />
