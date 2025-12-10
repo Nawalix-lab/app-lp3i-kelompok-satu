@@ -15,14 +15,16 @@ import { supabase } from "../../lib/supabase";
 import "../../global.css";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useColorScheme } from "nativewind";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
 
   // State User
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
-  
+
   const [session, setSession] = useState<any | null>(null);
   const userId = session?.user?.id;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -44,100 +46,100 @@ export default function HomeScreen() {
   const hasLowStock = stats.lowStock > 0;
 
   async function fetchDashboardData(userId: string) {
-  try {
-    const { data: products, error } = await supabase
-      .from("products")
-      .select("id, stock, price, min_stock")
-      .eq("user_id", userId);
+    try {
+      const { data: products, error } = await supabase
+        .from("products")
+        .select("id, stock, price, min_stock")
+        .eq("user_id", userId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const totalProds = products?.length || 0;
-    const lowStk =
-      products?.filter((p: any) => (p.stock ?? 0) <= (p.min_stock ?? 5))
-        .length || 0;
+      const totalProds = products?.length || 0;
+      const lowStk =
+        products?.filter((p: any) => (p.stock ?? 0) <= (p.min_stock ?? 5))
+          .length || 0;
 
-    // Ambil transaksi hari ini
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString();
+      // Ambil transaksi hari ini
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString();
 
-    const { data: movements, error: movError } = await supabase
-      .from("stock_movements")
-      .select("quantity, product_id")
-      .eq("type", "OUT")
-      .eq("user_id", userId)
-      .gte("created_at", todayStr);
+      const { data: movements, error: movError } = await supabase
+        .from("stock_movements")
+        .select("quantity, product_id")
+        .eq("type", "OUT")
+        .eq("user_id", userId)
+        .gte("created_at", todayStr);
 
-    if (movError) throw movError;
+      if (movError) throw movError;
 
-    let revenue = 0;
-    const txCount = movements?.length || 0;
+      let revenue = 0;
+      const txCount = movements?.length || 0;
 
-    movements?.forEach((mov: any) => {
-      const product = products.find((p: any) => p.id === mov.product_id);
-      if (product && product.price) revenue += mov.quantity * product.price;
-    });
+      movements?.forEach((mov: any) => {
+        const product = products.find((p: any) => p.id === mov.product_id);
+        if (product && product.price) revenue += mov.quantity * product.price;
+      });
 
-    setStats({
-      totalProducts: totalProds,
-      lowStock: lowStk,
-      todayTransactions: txCount,
-      todayRevenue: revenue,
-    });
-  } catch (error) {
-    console.error("Error fetching dashboard:", error);
+      setStats({
+        totalProducts: totalProds,
+        lowStock: lowStk,
+        todayTransactions: txCount,
+        todayRevenue: revenue,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
+    }
   }
-}
 
-const fetchUserAndStats = async () => {
-      setLoading(true);
-      try {
-        // Ambil session
-        const { data } = await supabase.auth.getSession();
-        setSession(data.session); // <--- set session
-        const user = data.session?.user;
-        if (!user) {
-          router.replace("/(auth)/login");
-          return;
-        }
-
-        const fullName = user.user_metadata?.full_name || "User";
-        setUserName(fullName);
-        setUserEmail(user.email || "");
-
-        // Ambil avatar
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("avatar_url")
-          .eq("id", user.id)
-          .single();
-        if (!profileError) setAvatarUrl(profileData?.avatar_url || null);
-
-        // Ambil data produk & transaksi
-        await fetchDashboardData(user.id);
-
-      } catch (error) {
-        console.error("Error fetching dashboard:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  const fetchUserAndStats = async () => {
+    setLoading(true);
+    try {
+      // Ambil session
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session); // <--- set session
+      const user = data.session?.user;
+      if (!user) {
+        router.replace("/(auth)/login");
+        return;
       }
-    };
+
+      const fullName = user.user_metadata?.full_name || "User";
+      setUserName(fullName);
+      setUserEmail(user.email || "");
+
+      // Ambil avatar
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .single();
+      if (!profileError) setAvatarUrl(profileData?.avatar_url || null);
+
+      // Ambil data produk & transaksi
+      await fetchDashboardData(user.id);
+
+    } catch (error) {
+      console.error("Error fetching dashboard:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   // 1. Cek Session User
   useFocusEffect(
-  React.useCallback(() => {
+    React.useCallback(() => {
+      fetchUserAndStats();
+    }, [])
+  );
+
+
+  // Refresh function
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
     fetchUserAndStats();
-  }, [])
-);
-
-
-// Refresh function
-const onRefresh = React.useCallback(() => {
-  setRefreshing(true);
-  fetchUserAndStats();
-}, []);
+  }, []);
 
 
   const initial = (userName || "U").charAt(0).toUpperCase();
@@ -165,8 +167,8 @@ const onRefresh = React.useCallback(() => {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-    
+    <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
+
       <StatusBar style="dark" />
 
       <ScrollView
@@ -177,13 +179,13 @@ const onRefresh = React.useCallback(() => {
         }
       >
         {/* HEADER PROFILE */}
-        <View className="bg-white pt-10 pb-6 px-5 flex-row items-center justify-between border-b border-gray-100 shadow-sm mb-4">
+        <View className="bg-white dark:bg-gray-800 pt-10 pb-6 px-5 flex-row items-center justify-between border-b border-gray-100 dark:border-gray-700 shadow-sm mb-4">
           {/* kiri: teks */}
           <View>
-            <Text className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <Text className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Dashboard Owner
             </Text>
-            <Text className="text-xl font-bold text-gray-900 mt-1">
+            <Text className="text-xl font-bold text-gray-900 dark:text-white mt-1">
               Hai, {userName || "Boss"} 👋
             </Text>
           </View>
@@ -196,7 +198,7 @@ const onRefresh = React.useCallback(() => {
               className="mr-3"
               activeOpacity={0.7}
             >
-      <View className="h-10 w-10 rounded-full bg-red-50 items-center justify-center relative">
+              <View className="h-10 w-10 rounded-full bg-red-50 items-center justify-center relative">
                 <Ionicons
                   name="notifications-outline"
                   size={20}
@@ -211,16 +213,16 @@ const onRefresh = React.useCallback(() => {
 
             {/* avatar / inisial */}
             <TouchableOpacity
-            onPress={() => router.push("/(tabs)/profile")}
-            className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
-            ) : (
-              <Text className="text-lg font-bold text-blue-500">
-                {initial}
-              </Text>
-            )}
-          </TouchableOpacity>
+              onPress={() => router.push("/(tabs)/profile")}
+              className="h-11 w-11 rounded-full bg-gray-100 border border-gray-200 items-center justify-center">
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} className="h-11 w-11 rounded-full" />
+              ) : (
+                <Text className="text-lg font-bold text-blue-500">
+                  {initial}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -257,11 +259,11 @@ const onRefresh = React.useCallback(() => {
             {/* Tombol Kasir */}
             <TouchableOpacity
               activeOpacity={0.9}
-              className="bg-white px-4 py-3 rounded-xl flex-row items-center justify-center"
+              className="bg-white dark:bg-gray-800 px-4 py-3 rounded-xl flex-row items-center justify-center"
               onPress={() => router.push("/(tabs)/kasir")}
             >
-              <Ionicons name="cart-outline" size={20} color="#2563EB" />
-              <Text className="text-blue-700 font-bold ml-2">
+              <Ionicons name="cart-outline" size={20} color={colorScheme === 'dark' ? '#60A5FA' : '#2563EB'} />
+              <Text className="text-blue-700 dark:text-blue-400 font-bold ml-2">
                 Buka Kasir / Jual
               </Text>
             </TouchableOpacity>
@@ -273,27 +275,27 @@ const onRefresh = React.useCallback(() => {
           {/* Card Total Item */}
           <TouchableOpacity
             onPress={() => router.push("/(tabs)/stok")}
-            className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center"
+            className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm items-center"
           >
-            <View className="w-10 h-10 bg-indigo-50 rounded-full items-center justify-center mb-2">
+            <View className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-full items-center justify-center mb-2">
               <MaterialCommunityIcons
                 name="package-variant"
                 size={22}
-                color="#4F46E5"
+                color={colorScheme === 'dark' ? '#818CF8' : '#4F46E5'}
               />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">
+            <Text className="text-2xl font-bold text-gray-900 dark:text-white">
               {stats.totalProducts}
             </Text>
-            <Text className="text-xs text-gray-500">Total Produk</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400">Total Produk</Text>
           </TouchableOpacity>
 
           {/* Card Stok Menipis */}
           <TouchableOpacity
             onPress={() => router.push("/(tabs)/notifikasi")}
-            className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center"
+            className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm items-center"
           >
-            <View className="w-10 h-10 bg-orange-50 rounded-full items-center justify-center mb-2">
+            <View className="w-10 h-10 bg-orange-50 dark:bg-orange-900/30 rounded-full items-center justify-center mb-2">
               <MaterialCommunityIcons
                 name="alert-circle-outline"
                 size={22}
@@ -301,28 +303,27 @@ const onRefresh = React.useCallback(() => {
               />
             </View>
             <Text
-              className={`text-2xl font-bold ${
-                stats.lowStock > 0 ? "text-orange-600" : "text-gray-900"
-              }`}
+              className={`text-2xl font-bold ${stats.lowStock > 0 ? "text-orange-600" : "text-gray-900 dark:text-white"
+                }`}
             >
               {stats.lowStock}
             </Text>
-            <Text className="text-xs text-gray-500">Stok Menipis</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400">Stok Menipis</Text>
           </TouchableOpacity>
 
           {/* Card Transaksi */}
-          <View className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center">
-            <View className="w-10 h-10 bg-green-50 rounded-full items-center justify-center mb-2">
+          <View className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm items-center">
+            <View className="w-10 h-10 bg-green-50 dark:bg-green-900/30 rounded-full items-center justify-center mb-2">
               <MaterialCommunityIcons
                 name="receipt"
                 size={22}
-                color="#16A34A"
+                color={colorScheme === 'dark' ? '#4ADE80' : '#16A34A'}
               />
             </View>
-            <Text className="text-2xl font-bold text-gray-900">
+            <Text className="text-2xl font-bold text-gray-900 dark:text-white">
               {stats.todayTransactions}
             </Text>
-            <Text className="text-xs text-gray-500">Trx Hari Ini</Text>
+            <Text className="text-xs text-gray-500 dark:text-gray-400">Trx Hari Ini</Text>
           </View>
         </View>
 
@@ -336,63 +337,64 @@ const onRefresh = React.useCallback(() => {
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => router.push("/(tabs)/stok")}
-            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
+            className="flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 mb-3 shadow-sm"
           >
-            <View className="h-12 w-12 bg-blue-50 rounded-2xl items-center justify-center mr-4">
+            <View className="h-12 w-12 bg-blue-50 dark:bg-blue-900/20 rounded-2xl items-center justify-center mr-4">
               <MaterialCommunityIcons
                 name="cube-outline"
                 size={24}
-                color="#2563EB"
+                color={colorScheme === 'dark' ? '#60A5FA' : '#2563EB'}
               />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">
+              <Text className="text-base font-bold text-gray-900 dark:text-white">
                 Stok Barang
               </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Input stok masuk, edit & hapus barang
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            <Ionicons name="chevron-forward" size={20} color={colorScheme === 'dark' ? '#6B7280' : '#D1D5DB'} />
           </TouchableOpacity>
 
           {/* Laporan */}
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => router.push("/(tabs)/laporan")}
-            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
+            className="flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 mb-3 shadow-sm"
           >
-            <View className="h-12 w-12 bg-purple-50 rounded-2xl items-center justify-center mr-4">
-              <Ionicons name="stats-chart" size={24} color="#9333EA" />
+            <View className="h-12 w-12 bg-purple-50 dark:bg-purple-900/20 rounded-2xl items-center justify-center mr-4">
+              <Ionicons name="stats-chart" size={24} color={colorScheme === 'dark' ? '#C084FC' : '#9333EA'} />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">
+              <Text className="text-base font-bold text-gray-900 dark:text-white">
                 Laporan Keuangan
               </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Lihat grafik profit & pengeluaran
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            <Ionicons name="chevron-forward" size={20} color={colorScheme === 'dark' ? '#6B7280' : '#D1D5DB'} />
           </TouchableOpacity>
 
           {/* Pengaturan */}
           <TouchableOpacity
             activeOpacity={0.7}
-            className="flex-row items-center bg-white p-4 rounded-2xl border border-gray-200 mb-3 shadow-sm"
+            onPress={() => router.push("/settings")}
+            className="flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 mb-3 shadow-sm"
           >
-            <View className="h-12 w-12 bg-gray-50 rounded-2xl items-center justify-center mr-4">
-              <Ionicons name="settings-outline" size={24} color="#4B5563" />
+            <View className="h-12 w-12 bg-gray-50 dark:bg-gray-700 rounded-2xl items-center justify-center mr-4">
+              <Ionicons name="settings-outline" size={24} color={colorScheme === 'dark' ? '#9CA3AF' : '#4B5563'} />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">
+              <Text className="text-base font-bold text-gray-900 dark:text-white">
                 Pengaturan
               </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 Profil toko & akun
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            <Ionicons name="chevron-forward" size={20} color={colorScheme === 'dark' ? '#6B7280' : '#D1D5DB'} />
           </TouchableOpacity>
         </View>
 
@@ -405,7 +407,7 @@ const onRefresh = React.useCallback(() => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    
+
     </SafeAreaView>
   );
 }

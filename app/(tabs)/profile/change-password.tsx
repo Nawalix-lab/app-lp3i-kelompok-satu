@@ -13,9 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../../lib/supabase";
 import "../../../global.css";
 
+import { useColorScheme } from "nativewind";
+
 export default function ChangePasswordScreen() {
     const navigation = useNavigation();
     const router = useRouter();
+    const { colorScheme } = useColorScheme();
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -48,35 +51,37 @@ export default function ChangePasswordScreen() {
     }
 
     return (
-        <View className="flex-1 bg-gray-50">
-            <StatusBar style="dark" />
+        <View className="flex-1 bg-gray-50 dark:bg-gray-900">
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             {/* Header */}
-            <View className="bg-white pt-12 pb-4 px-4 flex-row items-center border-b border-gray-200">
+            <View className="bg-white dark:bg-gray-800 pt-12 pb-4 px-4 flex-row items-center border-b border-gray-200 dark:border-gray-700">
                 <TouchableOpacity onPress={() => navigation.goBack()} className="p-2">
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                    <Ionicons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#FFFFFF' : '#1F2937'} />
                 </TouchableOpacity>
-                <Text className="text-lg font-semibold text-gray-900 ml-4">
+                <Text className="text-lg font-semibold text-gray-900 dark:text-white ml-4">
                     Ubah Password
                 </Text>
             </View>
 
             <View className="p-5 space-y-4 mt-4">
                 <View>
-                    <Text className="text-gray-600 mb-2">Password Baru</Text>
+                    <Text className="text-gray-600 dark:text-gray-400 mb-2">Password Baru</Text>
                     <TextInput
-                        className="bg-white border border-gray-300 rounded-lg p-3 text-base"
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-3 text-base dark:text-white"
                         placeholder="Masukkan password baru"
+                        placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                         secureTextEntry
                         value={newPassword}
                         onChangeText={setNewPassword}
                     />
                 </View>
                 <View>
-                    <Text className="text-gray-600 mb-2">Konfirmasi Password Baru</Text>
+                    <Text className="text-gray-600 dark:text-gray-400 mb-2">Konfirmasi Password Baru</Text>
                     <TextInput
-                        className="bg-white border border-gray-300 rounded-lg p-3 text-base"
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-3 text-base dark:text-white"
                         placeholder="Ulangi password baru"
+                        placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                         secureTextEntry
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}

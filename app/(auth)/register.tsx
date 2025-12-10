@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import "../../global.css";
 import React from 'react';
+import { useColorScheme } from "nativewind";
 
 
 export default function RegisterScreen() {
@@ -14,6 +15,7 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
 
   // Validasi email format
   const isValidEmail = (email: string) => {
@@ -41,7 +43,7 @@ export default function RegisterScreen() {
 
   async function signUpWithEmail() {
     console.log('Sign up button pressed');
-    
+
     // Validasi: Semua field harus diisi
     if (!fullName.trim()) {
       console.log('Validation failed: fullName empty');
@@ -133,7 +135,7 @@ export default function RegisterScreen() {
       // Sukses register
       if (data.user) {
         console.log('User created:', data.user.id);
-        
+
         // Cek apakah perlu verifikasi email
         if (data.user.identities && data.user.identities.length === 0) {
           console.log('Email already used');
@@ -169,25 +171,25 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-white"
+      className="flex-1 bg-white dark:bg-gray-900"
     >
-      <StatusBar style="dark" />
-      
-      <ScrollView 
-        className="flex-1" 
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+
+      <ScrollView
+        className="flex-1"
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
         <View className="flex-1 justify-center px-6 py-8">
           {/* Header */}
           <View className="mb-8">
-            
-            <Text className="text-3xl font-bold text-gray-900 mb-2">
+
+            <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
               Buat Akun Baru
             </Text>
-            <Text className="text-base text-gray-600">
+            <Text className="text-base text-gray-600 dark:text-gray-400">
               Daftar untuk memulai menggunakan kaStok
             </Text>
           </View>
@@ -196,12 +198,13 @@ export default function RegisterScreen() {
           <View className="gap-4">
             {/* Full Name Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Nama Lengkap <Text className="text-red-500">*</Text>
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-white"
+                className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white"
                 placeholder="Masukkan nama lengkap"
+                placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                 value={fullName}
                 onChangeText={setFullName}
                 editable={!loading}
@@ -211,12 +214,13 @@ export default function RegisterScreen() {
 
             {/* Email Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email <Text className="text-red-500">*</Text>
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-white"
+                className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white"
                 placeholder="nama@email.com"
+                placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -228,31 +232,33 @@ export default function RegisterScreen() {
 
             {/* Password Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Password <Text className="text-red-500">*</Text>
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-white"
+                className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white"
                 placeholder="Minimal 6 karakter"
+                placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
                 editable={!loading}
                 autoComplete="password-new"
               />
-              <Text className="text-xs text-gray-500 mt-1">
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Gunakan minimal 6 karakter untuk password Anda
               </Text>
             </View>
 
             {/* Confirm Password Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Konfirmasi Password <Text className="text-red-500">*</Text>
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base bg-white"
+                className="border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white"
                 placeholder="Ulangi password"
+                placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
@@ -263,7 +269,7 @@ export default function RegisterScreen() {
 
             {/* Register Button */}
             <TouchableOpacity
-              className={`rounded-lg py-4 mt-4 ${loading ? 'bg-blue-300' : 'bg-blue-500'}`}
+              className={`rounded-lg py-4 mt-4 ${loading ? 'bg-blue-300' : 'bg-blue-500 dark:bg-blue-600'}`}
               onPress={signUpWithEmail}
               disabled={loading}
             >
@@ -283,14 +289,14 @@ export default function RegisterScreen() {
 
             {/* Login Link */}
             <View className="flex-row justify-center mt-4">
-              <Text className="text-gray-600">
+              <Text className="text-gray-600 dark:text-gray-400">
                 Sudah punya akun?{' '}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => router.back()}
                 disabled={loading}
               >
-                <Text className="text-blue-500 font-semibold">
+                <Text className="text-blue-500 dark:text-blue-400 font-semibold">
                   Masuk
                 </Text>
               </TouchableOpacity>

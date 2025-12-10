@@ -6,6 +6,7 @@ module.exports = {
     './app/(auth)/**/*.{js,jsx,ts,tsx}',
     './app/(tabs)/**/*.{js,jsx,ts,tsx}',
   ],
+  darkMode: 'class',
   presets: [require('nativewind/preset')],
   theme: {
     extend: {},
