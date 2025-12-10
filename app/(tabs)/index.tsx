@@ -13,7 +13,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  StyleSheet,
+  StyleSheet
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -22,14 +22,16 @@ import { supabase } from "../../lib/supabase";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import "../../global.css";
 
-// ==== SCREEN DATA ====
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const FAB_SIZE = 56;
-const FAB_MARGIN = 24;
 
 
 
 export default function HomeScreen() {
+
+  // ==== SCREEN DATA ====
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const FAB_SIZE = 56;
+const FAB_MARGIN = 24;
+
     const router = useRouter();
 
   // ====================== USER STATE ===========================

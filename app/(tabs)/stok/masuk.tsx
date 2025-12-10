@@ -18,43 +18,6 @@
     description?: string;
     user_id: string;}
     
-export default function BarangMasukScreen() {
-  const router = useRouter();
-  
-  // State Form
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [quantity, setQuantity] = useState("");
-  const [notes, setNotes] = useState("");
-  
-  // State Data & UI
-  const [products, setProducts] = useState([]);
-  const [loadingSubmit, setLoadingSubmit] = useState(false);
-  
-  // Modals
-  const [modalVisible, setModalVisible] = useState(false); // Modal cari manual
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [searchText, setSearchText] = useState("");
-  const [session, setSession] = useState<any>(null);
-
-  // Camera State
-  const [permission, requestPermission] = useCameraPermissions();
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        fetchProducts(session.user.id);
-      }
-    });
-  }, []);
-
-  const fetchProducts = async (userId: string) => {
-    if (!userId) return;
-    const { data } = await supabase.from('products').select('*').eq('user_id', userId).order('name');
-    if (data) setProducts(data);
-  };
 
   export default function BarangMasukScreen() {
     const router = useRouter();
@@ -83,11 +46,25 @@ export default function BarangMasukScreen() {
       fetchProducts();
     }, []);
 
-    const fetchProducts = async () => {
-      const currentUser = supabase.auth.getUser();
-      const { data } = await supabase.from('products').select('*').eq('user_id', currentUser?.id).order('name');
-      if (data) setProducts(data);
-    };
+   const fetchProducts = async () => {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+
+  if (!user) return;
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("name");
+
+  if (error) {
+    console.log("Error fetch:", error);
+  }
+
+  if (data) setProducts(data);
+};
+
 
     // --- LOGIKA SCAN BARCODE UNTUK CARI PRODUK ---
     const handleScanPress = async () => {
