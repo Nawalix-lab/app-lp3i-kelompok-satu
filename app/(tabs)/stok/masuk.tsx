@@ -7,16 +7,28 @@ import { CameraView, useCameraPermissions } from 'expo-camera'; // Import Kamera
 import { supabase } from "../../../lib/supabase";
 import "../../../global.css";
 
+  type Product = {
+    id: number;
+    name: string;
+    category: string;
+    stock: number;
+    unit: string;
+    price: number;
+    barcode?: string;
+    description?: string;
+    user_id: string;}
+
 export default function BarangMasukScreen() {
   const router = useRouter();
   
   // State Form
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
   
   // State Data & UI
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   
   // Modals
@@ -44,6 +56,8 @@ export default function BarangMasukScreen() {
     const { data } = await supabase.from('products').select('*').eq('user_id', userId).order('name');
     if (data) setProducts(data);
   };
+
+    
 
   // --- LOGIKA SCAN BARCODE UNTUK CARI PRODUK ---
   const handleScanPress = async () => {
