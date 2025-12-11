@@ -9,6 +9,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import "../../global.css";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function KalkulatorScreen() {
   const [display, setDisplay] = useState("0");
@@ -110,7 +111,7 @@ export default function KalkulatorScreen() {
   );
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white">
       <StatusBar style="dark" />
 
       {/* HEADER */}
@@ -203,7 +204,7 @@ export default function KalkulatorScreen() {
           </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

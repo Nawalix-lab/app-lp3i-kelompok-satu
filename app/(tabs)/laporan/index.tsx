@@ -1,12 +1,14 @@
 import React, { useState, useCallback } from "react";
 
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator, Dimensions } from "react-native";
 
 import { StatusBar } from "expo-status-bar";
 
 import { useRouter, useFocusEffect } from "expo-router";
 
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+
+import { LineChart } from "react-native-chart-kit";
 
 import { supabase } from "../../../lib/supabase";
 
@@ -28,9 +30,9 @@ import "../../../global.css";
 
  */
 
-const groupTransactionsByDay = (transactions) => {
+const groupTransactionsByDay = (transactions: any[]) => {
 
-  const dailySummary = transactions.reduce((acc, t) => {
+  const dailySummary = transactions.reduce((acc: any, t: any) => {
 
     // Ambil tanggal dalam format YYYY-MM-DD
 
@@ -72,7 +74,7 @@ const groupTransactionsByDay = (transactions) => {
 
   // Konversi object menjadi array dan urutkan dari tanggal terbaru
 
-  return Object.values(dailySummary).sort((a, b) => new Date(b.date) - new Date(a.date));
+  return Object.values(dailySummary).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
 };
 
@@ -90,7 +92,7 @@ export default function LaporanScreen() {
 
   // State baru untuk menyimpan ID pengguna yang sedang login
 
-  const [userId, setUserId] = useState(null); 
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [summary, setSummary] = useState({
 
@@ -106,7 +108,7 @@ export default function LaporanScreen() {
 
   // State baru untuk menyimpan data transaksi yang sudah dikelompokkan per hari
 
-  const [dailyTransactions, setDailyTransactions] = useState([]);
+  const [dailyTransactions, setDailyTransactions] = useState<any[]>([]);
 
 
 
@@ -136,7 +138,7 @@ export default function LaporanScreen() {
 
   // Fungsi Load Data
 
-  const fetchData = async (currentUserId) => {
+  const fetchData = async (currentUserId: string) => {
 
     // Jika tidak ada ID user, hentikan pengambilan data
 
@@ -178,7 +180,7 @@ export default function LaporanScreen() {
 
       // 2. Kelompokkan dan Hitung Ringkasan Harian
 
-      const dailySummaryData = groupTransactionsByDay(trxData);
+      const dailySummaryData = groupTransactionsByDay(trxData || []);
 
       setDailyTransactions(dailySummaryData);
 
@@ -194,7 +196,7 @@ export default function LaporanScreen() {
 
 
 
-      dailySummaryData.forEach(d => {
+      dailySummaryData.forEach((d: any) => {
 
         totalOmzet += d.omzet;
 
@@ -302,7 +304,7 @@ export default function LaporanScreen() {
 
   // Format Tanggal untuk Tampilan
 
-  const formatDateForDisplay = (dateString) => {
+  const formatDateForDisplay = (dateString: string) => {
 
     const date = new Date(dateString);
 
@@ -328,7 +330,7 @@ export default function LaporanScreen() {
 
 
 
-    const options = { day: 'numeric', month: 'long', year: 'numeric' };
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
 
     return date.toLocaleDateString('id-ID', options);
 
@@ -338,7 +340,7 @@ export default function LaporanScreen() {
 
   // Format Mata Uang ringkas (untuk chart)
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number) => {
 
     // Fungsi bantuan untuk menyingkat angka besar (misal: 110.000 menjadi 110K)
 
@@ -362,7 +364,7 @@ export default function LaporanScreen() {
 
   // Format Mata Uang standar (dengan Rp)
 
-  const formatStandardCurrency = (amount) => {
+  const formatStandardCurrency = (amount: number) => {
 
       return `Rp ${amount.toLocaleString('id-ID')}`;
 
@@ -372,7 +374,7 @@ export default function LaporanScreen() {
 
   // --- FUNGSI BARU UNTUK NAVIGASI ---
 
-  const handleDailyItemPress = (date) => {
+  const handleDailyItemPress = (date: string) => {
 
       router.push({
 
@@ -390,7 +392,7 @@ export default function LaporanScreen() {
 
 
 
-  const renderTransactionItem = (item) => (
+  const renderTransactionItem = (item: any) => (
 
     // UBAH DARI <View> MENJADI <TouchableOpacity>
 
@@ -440,15 +442,15 @@ export default function LaporanScreen() {
 
 
 
-  // --- FUNGSI BARU: renderSimpleLineChart (DIPERBAIKI) ---
+  // --- FUNGSI BARU: renderSimpleLineChart dengan react-native-chart-kit ---
 
   const renderSimpleLineChart = () => {
 
     // Ambil maksimal 7 hari terakhir
 
-    const chartData = dailyTransactions.slice(0, 7).reverse(); // Data diurutkan dari yang terlama ke terbaru (untuk Line Chart)
+    const chartData = dailyTransactions.slice(0, 7).reverse();
 
-
+    
 
     if (chartData.length === 0) {
 
@@ -458,193 +460,149 @@ export default function LaporanScreen() {
 
 
 
-    const maxVal = Math.max(...chartData.map((x) => x.omzet));
+    // Siapkan data untuk chart dengan area fill
+
+    const data = {
+
+      labels: chartData.map((d: any) => {
+
+        const date = new Date(d.date);
+
+        return date.getDate().toString();
+
+      }),
+
+      datasets: [
+
+        {
+
+          data: chartData.map((d: any) => d.omzet),
+
+          color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`, // Purple color
+
+          strokeWidth: 3
+
+        }
+
+      ]
+
+    };
 
 
 
-    // Konstanta untuk mengontrol tinggi maksimum chart (misalnya 90% dari container untuk memberi ruang di atas)
-
-    const MAX_HEIGHT_PERCENTAGE = 90;
-
-
-
-    // Logika untuk menghitung posisi Y relatif dari setiap titik data
-
-    const dataPoints = chartData.map((d, index) => {
-
-        // Normalisasi tinggi (Y position)
-
-        const normalizedHeight = (d.omzet / (maxVal || 1));
-
-        // bottomPosition dihitung relatif terhadap bottom container.
-
-        const bottomPosition = normalizedHeight * MAX_HEIGHT_PERCENTAGE;
-
-
-
-        const dateDay = new Date(d.date).getDate();
-
-
-
-        return {
-
-            dateDay,
-
-            omzet: d.omzet,
-
-            // Posisi Y (bottom)
-
-            bottom: `${bottomPosition}%`,
-
-            // Posisi X (left). Chart 7 hari berarti 6 interval (0/6, 1/6, ..., 6/6)
-
-            left: `${(index / (chartData.length - 1)) * 100}%`,
-
-            // Posisi label Y (5px di atas titik)
-
-            labelBottom: `${bottomPosition + 5}%`,
-
-        };
-
-    });
-
-
-
-    // Tentukan lebar kolom untuk label X-Axis di bagian bawah
-
-    const columnWidth = `${100 / chartData.length}%`;
+    const screenWidth = Dimensions.get("window").width - 40; // padding 20 on each side
 
 
 
     return (
 
-        // Container utama untuk menempatkan titik data secara absolut
+      <LineChart
 
-        // Kita biarkan elemen ini sebagai wrapper utama grafik
+        data={data}
 
-        <View className="relative w-full h-full">
+        width={screenWidth}
 
-            {/* Grid Y (Optional, untuk visual) */}
+        height={220}
 
-            <View className="absolute top-1/2 left-0 right-0 border-t border-gray-200" />
+        chartConfig={{
 
-            <View className="absolute bottom-0 left-0 right-0 border-t border-gray-200" />
+          backgroundColor: "#f3e8ff",
 
-            
+          backgroundGradientFrom: "#f3e8ff",
 
-            {/* Render Titik Data dan Label Omzet */}
+          backgroundGradientFromOpacity: 0.3,
 
-            {dataPoints.map((point, index) => (
+          backgroundGradientTo: "#ffffff",
 
-                <React.Fragment key={index}>
+          backgroundGradientToOpacity: 0.1,
 
-                    {/* Label Total Penjualan (Diletakkan di kontainer terpisah, diposisikan secara absolut) */}
+          decimalPlaces: 0,
 
-                    {/* Lebar teks harus diukur atau diperkirakan agar pusatnya sejajar dengan titik */}
+          color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
 
-                    <View 
+          labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
 
-                        className="absolute items-center justify-center"
+          style: {
 
-                        style={{ 
+            borderRadius: 16
 
-                            // bottom point.bottom + (tinggi titik/2) + margin
+          },
 
-                            bottom: point.bottom, 
+          propsForDots: {
 
-                            // left point.left - (lebar label/2)
+            r: "6",
 
-                            left: `calc(${point.left} - 20px)`, // 20px adalah perkiraan setengah lebar minimum label 40px
+            strokeWidth: "3",
 
-                            minWidth: 40, // Lebar minimum untuk teks Omzet
+            stroke: "#8b5cf6",
 
-                            zIndex: 20,
+            fill: "#ffffff"
 
-                        }}
+          },
 
-                    >
+          propsForBackgroundLines: {
 
-                        {/* Text Label */}
+            strokeDasharray: "",
 
-                        <Text 
+            stroke: "#e9d5ff",
 
-                            className="text-xs text-gray-900 font-bold mb-1"
+            strokeWidth: 1,
 
-                            // Tambahkan style transform: translateY agar teks bergeser sedikit ke atas
+            strokeOpacity: 0.3
 
-                            style={{ transform: [{ translateY: -18 }] }} 
+          },
 
-                        >
+          fillShadowGradient: "#8b5cf6",
 
-                            {formatCurrency(point.omzet)}
+          fillShadowGradientOpacity: 0.3,
 
-                        </Text>
+        }}
 
-                    </View>
+        bezier
 
+        style={{
 
+          marginVertical: 8,
 
-                    {/* Titik Data */}
+          borderRadius: 16,
 
-                    <View
+          paddingRight: 0
 
-                        className="absolute w-3 h-3 bg-blue-600 rounded-full"
+        }}
 
-                        // Atur posisi titik menggunakan style absolut
+        withShadow={true}
 
-                        style={{ 
+        withInnerLines={true}
 
-                            bottom: point.bottom, 
+        withOuterLines={false}
 
-                            // Sesuaikan posisi horizontal (left) agar titik berada di tengah hari (w-3 = 12px, jadi geser 6px)
+        withVerticalLines={false}
 
-                            left: `calc(${point.left} - 6px)`, 
+        withHorizontalLines={true}
 
-                            zIndex: 15, // Lebih tinggi dari grid, lebih rendah dari label
+        withVerticalLabels={true}
 
-                        }}
+        withHorizontalLabels={true}
 
-                    />
+        withDots={true}
 
-                </React.Fragment>
+        fromZero={true}
 
-            ))}
+        segments={4}
 
-            
+        decorator={() => {
 
-            {/* Label Tanggal (X-Axis) - Ditempatkan di dalam container chart, di bawah semua titik */}
+          return null;
 
-            <View className="absolute bottom-[-20px] left-0 right-0 flex-row justify-around">
+        }}
 
-                {chartData.map((d, index) => {
+        onDataPointClick={(data) => {
 
-                    const dateDay = new Date(d.date).getDate();
+          console.log(data);
 
-                    return (
+        }}
 
-                        <Text 
-
-                            key={index} 
-
-                            className="text-[10px] text-gray-400 mt-1 text-center"
-
-                            style={{ width: columnWidth }}
-
-                        >
-
-                            {dateDay}
-
-                        </Text>
-
-                    );
-
-                })}
-
-            </View>
-
-
-
-        </View>
+      />
 
     );
 
@@ -730,41 +688,19 @@ export default function LaporanScreen() {
 
 
 
-            {/* Grid Stats Kecil */}
+            {/* Card Total Omzet - Full Width */}
 
-            <View className="flex-row gap-3">
+            <View className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
 
-                <View className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                <Text className="text-gray-500 text-xs mb-1">Total Omzet</Text>
 
-                    <Text className="text-gray-500 text-xs mb-1">Total Omzet</Text>
+                <Text className="text-2xl font-bold text-gray-900">{formatStandardCurrency(summary.omzet)}</Text>
 
-                    <Text className="text-lg font-bold text-gray-900">{formatStandardCurrency(summary.omzet)}</Text>
+                <View className="flex-row items-center mt-2">
 
-                    <View className="flex-row items-center mt-2">
+                    <Ionicons name="arrow-up" size={14} color="#16A34A" />
 
-                        <Ionicons name="arrow-up" size={12} color="#16A34A" />
-
-                        <Text className="text-[10px] text-green-600 font-bold ml-1">Penjualan</Text>
-
-                    </View>
-
-                </View>
-
-                
-
-                <View className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-
-                    <Text className="text-gray-500 text-xs mb-1">Total Modal</Text>
-
-                    <Text className="text-lg font-bold text-gray-900">{formatStandardCurrency(summary.expenses)}</Text>
-
-                     <View className="flex-row items-center mt-2">
-
-                        <Ionicons name="cube-outline" size={12} color="#EA580C" />
-
-                        <Text className="text-[10px] text-orange-600 font-bold ml-1">COGS / HPP</Text>
-
-                    </View>
+                    <Text className="text-xs text-green-600 font-bold ml-1">Total Penjualan dari {summary.totalTrx} transaksi</Text>
 
                 </View>
 
@@ -774,23 +710,27 @@ export default function LaporanScreen() {
 
 
 
-        {/* SECTION 2: CHART SIMPLE (Visualisasi Garis) */}
+        {/* SECTION 2: CHART SIMPLE (Visualisasi Garis dengan Area Fill) */}
 
         <View className="px-5 mb-10">
 
             <Text className="text-base font-bold text-gray-900 mb-3">Tren Penjualan Harian (7 Hari Terakhir)</Text>
 
-            {/* Kita ubah class menjadi `items-stretch` dan menambah padding bottom untuk label X-Axis */}
+            {/* Chart container with gradient background */}
 
-            <View className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm items-stretch justify-around h-48 pb-6">
+            <View className="bg-white rounded-2xl border border-purple-100 shadow-lg overflow-hidden">
 
                 {loading ? (
 
-                    <ActivityIndicator color="#2563EB" />
+                    <View className="h-56 items-center justify-center">
+
+                        <ActivityIndicator color="#8b5cf6" />
+
+                    </View>
 
                 ) : (
 
-                    renderSimpleLineChart() // Panggil fungsi Line Chart yang sudah diperbaiki
+                    renderSimpleLineChart()
 
                 )}
 

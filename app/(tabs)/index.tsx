@@ -21,6 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import "../../global.css";
+import { useColorScheme } from "nativewind";
 
 
 
@@ -33,6 +34,7 @@ export default function HomeScreen() {
   const FAB_MARGIN = 24;
 
   const router = useRouter();
+  const { colorScheme } = useColorScheme();
 
   // ====================== USER STATE ===========================
   const [session, setSession] = useState<any | null>(null);
@@ -423,7 +425,30 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
           </TouchableOpacity>
+
+
+          {/* Pengaturan */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/settings")}
+            className="flex-row items-center bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 mb-3 shadow-sm"
+          >
+            <View className="h-12 w-12 bg-gray-50 dark:bg-gray-700 rounded-2xl items-center justify-center mr-4">
+              <Ionicons name="settings-outline" size={24} color={colorScheme === 'dark' ? '#9CA3AF' : '#4B5563'} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900 dark:text-white">
+                Pengaturan
+              </Text>
+              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Profil toko & akun
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colorScheme === 'dark' ? '#6B7280' : '#D1D5DB'} />
+          </TouchableOpacity>
         </View>
+
+        
       </ScrollView >
 
       {/* ================= FAB ================= */}

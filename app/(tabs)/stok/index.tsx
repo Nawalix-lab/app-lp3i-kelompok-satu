@@ -49,15 +49,24 @@ export default function StokScreen() {
     try {
       setLoading(true);
 
+      // Mulai query dari tabel products
       let query: any = supabase
         .from('products')
         .select('*')
-        .eq('user_id', user.id)
-        .order('name', { ascending: true });
+        .eq('user_id', user.id);
 
+      // Filter kategori server-side
+      if (filterCategory !== "Semua") {
+        query = query.eq('category', filterCategory);
+      }
+
+      // Filter search query server-side
       if (searchQuery) {
         query = query.ilike('name', `%${searchQuery}%`);
       }
+
+      // Urutkan berdasarkan nama
+      query = query.order('name', { ascending: true });
 
       const { data, error } = await query;
       if (error) throw error;
@@ -71,15 +80,12 @@ export default function StokScreen() {
   };
 
 
+
   useFocusEffect(useCallback(() => {
     if (user) fetchProducts();
-  }, [user, searchQuery]));
+  }, [user, searchQuery, filterCategory]));
 
 
-  const filteredProducts = products.filter(item => {
-    if (filterCategory === "Semua") return true;
-    return item.category === filterCategory;
-  });
 
 
 

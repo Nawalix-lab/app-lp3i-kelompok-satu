@@ -400,7 +400,8 @@ export default function KasirScreen() {
     const filteredProducts = products.filter(p =>
         p.stock > 0 && (
             (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
+            (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (p.barcode && p.barcode.toLowerCase().includes(searchQuery.toLowerCase()))
         )
     );
 

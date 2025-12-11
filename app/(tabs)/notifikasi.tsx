@@ -124,13 +124,8 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada export defaul
           </View>
         ) : items.length === 0 ? (
           <View className="mt-10 items-center">
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={40}
-              color="#16A34A"
-            />
             <Text className="mt-3 text-[13px] font-semibold text-gray-800 dark:text-gray-300">
-              Tidak ada stok menipis 🎉
+              Tidak ada stok menipis 
             </Text>
           </View>
         ) : (
