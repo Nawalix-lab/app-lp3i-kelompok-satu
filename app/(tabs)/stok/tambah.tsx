@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet, Button } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet, Button, KeyboardAvoidingView, Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -122,6 +122,11 @@ export default function TambahProdukScreen() {
   };
 
   return (
+    <KeyboardAvoidingView 
+    style={{ flex: 1 }}
+    behavior={Platform.OS === "ios" ? "padding" : "height"}>
+
+    
     <View className="flex-1 bg-white">
       <StatusBar style="dark" />
       
@@ -289,5 +294,6 @@ export default function TambahProdukScreen() {
       </Modal>
 
     </View>
+    </KeyboardAvoidingView>
   );
 }
