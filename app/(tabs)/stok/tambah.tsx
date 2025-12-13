@@ -1,20 +1,35 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Vibration, StyleSheet, Button, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useEffect, useState } from "react";
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  Modal, 
+  ActivityIndicator, 
+  Vibration, 
+  StyleSheet 
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from 'expo-camera'; // Import Kamera
-import { supabase } from "../../../lib/supabase";
+import { CameraView, useCameraPermissions } from 'expo-camera'; 
+import { supabase } from "../../../lib/supabase"; 
 import "../../../global.css";
-
 import { useColorScheme } from "nativewind";
 
 export default function TambahProdukScreen() {
   const router = useRouter();
   const { colorScheme } = useColorScheme();
+  
+  // State UI
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [session, setSession] = useState<any>(null);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  // State Data
+  const [user, setUser] = useState<any>(null);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
 
   // --- KAMERA STATE ---
   const [permission, requestPermission] = useCameraPermissions();
@@ -27,20 +42,55 @@ export default function TambahProdukScreen() {
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("Pcs");
-  const [category, setCategory] = useState("Makanan");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [initialStock, setInitialStock] = useState("");
-  const [user, setUser] = useState<any>(null);
 
+  // 1. Fetch User & Categories
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+    const fetchData = async () => {
+      try {
+        // A. Ambil User
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) return;
+        setUser(userData.user);
+
+        // B. Ambil Profil untuk tahu Store Type
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('store_type_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        let fetchedCategories = ["Umum", "Lain-lain"]; // Default fallback
+
+        if (profile?.store_type_id) {
+          // C. Ambil Kategori dari Master Categories
+          const { data: cats } = await supabase
+            .from('master_categories')
+            .select('name')
+            .eq('store_type_id', profile.store_type_id);
+
+          if (cats && cats.length > 0) {
+            fetchedCategories = cats.map(c => c.name);
+          }
+        }
+
+        setCategoriesList(fetchedCategories);
+        // Set default ke kategori pertama
+        if (fetchedCategories.length > 0) {
+          setCategory(fetchedCategories[0]);
+        }
+
+      } catch (error) {
+        console.error("Error init:", error);
+      } finally {
+        setIsLoadingCategories(false);
+      }
     };
 
-    getUser();
+    fetchData();
   }, []);
-
 
   // --- FUNGSI SCAN BARCODE ---
   const handleScanPress = async () => {
@@ -57,79 +107,81 @@ export default function TambahProdukScreen() {
 
   const handleBarCodeScanned = ({ type, data }: { type: string, data: string }) => {
     setScanned(true);
-    setBarcode(data); // Isi otomatis ke input barcode
-    setIsScanning(false); // Tutup kamera
-    Vibration.vibrate(); // Efek getar biar mantap
-    // alert(`Barcode tipe ${type} dan data ${data} berhasil discan!`); // Opsional
+    setBarcode(data);
+    setIsScanning(false);
+    Vibration.vibrate();
   };
 
   async function handleSave() {
-  if (!name) return alert("Nama barang wajib diisi!");    
-  if (!user?.id) return alert("Sesi pengguna tidak ditemukan, silakan login ulang.");
+    if (!name.trim()) return alert("Nama barang wajib diisi!");
+    if (!user?.id) return alert("Sesi pengguna tidak ditemukan, silakan login ulang.");
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-    if (userError || !currentUser) {
-      throw new Error("User belum login atau gagal mengambil data user!");
-    }
+    try {
+      // Cek ulang user untuk keamanan
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+      if (userError || !currentUser) {
+        throw new Error("User belum login atau gagal mengambil data user!");
+      }
 
-    if (sku) {
-      const { data: existing } = await supabase
+      // Cek SKU Unik (jika diisi)
+      if (sku.trim()) {
+        const { data: existing } = await supabase
+          .from('products')
+          .select('id')
+          .eq('sku', sku.trim())
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (existing) {
+          alert("Kode Barang (SKU) sudah digunakan.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const stockVal = parseInt(initialStock) || 0;
+      const priceVal = parseInt(price) || 0;
+
+      // Insert Produk
+      const { data: newProduct, error: productError } = await supabase
         .from('products')
-        .select('id')
-        .eq('sku', sku)
-        .eq('user_id', currentUser.id)
+        .insert({
+          name: name.trim(),
+          sku: sku.trim() || null,
+          barcode: barcode.trim() || null,
+          unit,
+          price: priceVal,
+          stock: stockVal,
+          category, // Ini sekarang dinamis sesuai store type
+          description,
+          user_id: currentUser.id,
+        })
+        .select()
         .single();
 
-      if (existing) {
-        alert("Kode Barang (SKU) sudah digunakan.");
-        setLoading(false);
-        return;
+      if (productError) throw productError;
+
+      // Catat Stok Awal
+      if (stockVal > 0 && newProduct) {
+        await supabase.from('stock_movements').insert({
+          product_id: newProduct.id,
+          type: 'IN',
+          quantity: stockVal,
+          notes: 'Stok Awal',
+          user_id: currentUser.id,
+        });
       }
+
+      setLoading(false);
+      setShowSuccess(true);
+
+    } catch (error: any) {
+      alert(error.message);
+      setLoading(false);
     }
-
-    const stockVal = parseInt(initialStock) || 0;
-    const priceVal = parseInt(price) || 0;
-
-    const { data: newProduct, error: productError } = await supabase
-      .from('products')
-      .insert({
-        name,
-        sku: sku || null,
-        barcode: barcode || null,
-        unit,
-        price: priceVal,
-        stock: stockVal,
-        category,
-        description,
-        user_id: currentUser.id,
-      })
-      .select()
-      .single();
-
-    if (productError) throw productError;
-
-    if (stockVal > 0 && newProduct) {
-      await supabase.from('stock_movements').insert({
-        product_id: newProduct.id,
-        type: 'IN',
-        quantity: stockVal,
-        notes: 'Stok Awal',
-        user_id: currentUser.id,
-      });
-    }
-
-    setLoading(false);
-    setShowSuccess(true);
-
-  } catch (error: any) {
-    alert(error.message);
-    setLoading(false);
   }
-}
-
 
   const handleSuccessConfirm = () => {
     setShowSuccess(false);
@@ -137,14 +189,9 @@ export default function TambahProdukScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-    style={{ flex: 1 }}
-    behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <View className="flex-1 bg-white dark:bg-gray-900">
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
-    
-    <View className="flex-1 bg-white">
-      <StatusBar style="dark" />
-      
       {/* Header */}
       <View className="pt-14 pb-4 px-5 border-b border-gray-100 dark:border-gray-800 flex-row items-center bg-white dark:bg-gray-800">
         <TouchableOpacity onPress={() => router.back()} className="mr-4">
@@ -167,29 +214,61 @@ export default function TambahProdukScreen() {
           />
         </View>
 
-        {/* Kategori */}
+        {/* Kategori (DINAMIS) */}
         <View className="mb-4">
           <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Kategori</Text>
-          <View className="flex-row gap-2">
-            {["Makanan", "Minuman", "Snack", "Lain-lain"].map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setCategory(cat)}
-                className={`flex-1 py-3 rounded-xl border items-center ${category === cat ? 'bg-blue-600 border-blue-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'}`}
-              >
-                <Text className={`font-semibold text-[10px] ${category === cat ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          
+          {isLoadingCategories ? (
+            <View className="flex-row items-center">
+               <ActivityIndicator size="small" color="#2563EB" />
+               <Text className="text-xs text-gray-500 ml-2">Memuat kategori...</Text>
+            </View>
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {categoriesList.map((cat, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => setCategory(cat)}
+                  style={{ 
+                    flexGrow: 1,
+                    flexBasis: categoriesList.length <= 3 
+                      ? `${(100 / categoriesList.length) - 2}%` 
+                      : categoriesList.length === 4
+                      ? '23%'
+                      : '18%'
+                  }}
+                  className={`px-3 py-2.5 rounded-xl border items-center justify-center ${
+                    category === cat 
+                      ? 'bg-blue-600 border-blue-600' 
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  <Text 
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    className={`text-xs font-semibold ${
+                      category === cat ? 'text-white' : 'text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* SKU & Barcode (DENGAN TOMBOL SCAN) */}
+        {/* SKU & Barcode */}
         <View className="flex-row gap-4 mb-4">
           <View className="flex-1">
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Kode (SKU)</Text>
-            <TextInput className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" placeholder="Opsional" placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} value={sku} onChangeText={setSku} />
+            <TextInput 
+              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" 
+              placeholder="Opsional" 
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} 
+              value={sku} 
+              onChangeText={setSku} 
+            />
           </View>
 
           {/* KOLOM BARCODE + SCAN BUTTON */}
@@ -218,11 +297,24 @@ export default function TambahProdukScreen() {
         <View className="flex-row gap-4 mb-4">
           <View className="flex-1">
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Harga Jual</Text>
-            <TextInput className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" placeholder="0" placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} value={price} onChangeText={setPrice} keyboardType="numeric" />
+            <TextInput 
+              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" 
+              placeholder="0" 
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} 
+              value={price} 
+              onChangeText={setPrice} 
+              keyboardType="numeric" 
+            />
           </View>
           <View className="w-1/3">
             <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Satuan</Text>
-            <TextInput className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" placeholder="Pcs" placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} value={unit} onChangeText={setUnit} />
+            <TextInput 
+              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-base bg-white dark:bg-gray-800 dark:text-white" 
+              placeholder="Pcs" 
+              placeholderTextColor={colorScheme === 'dark' ? '#9CA3AF' : '#9CA3AF'} 
+              value={unit} 
+              onChangeText={setUnit} 
+            />
           </View>
         </View>
 
@@ -269,10 +361,8 @@ export default function TambahProdukScreen() {
               barcodeTypes: ["qr", "ean13", "ean8", "upc_e", "code128"],
             }}
           >
-            {/* Overlay UI Scanner */}
             <View className="flex-1 bg-black/40 justify-center items-center">
               <View className="w-64 h-64 border-2 border-white/60 rounded-3xl bg-transparent relative">
-                {/* Garis Pojok Pemanis */}
                 <View className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
                 <View className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
                 <View className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
@@ -283,7 +373,6 @@ export default function TambahProdukScreen() {
               </Text>
             </View>
 
-            {/* Tombol Tutup Scanner */}
             <View className="absolute top-12 left-5">
               <TouchableOpacity
                 onPress={() => setIsScanning(false)}
@@ -313,6 +402,5 @@ export default function TambahProdukScreen() {
       </Modal>
 
     </View>
-    </KeyboardAvoidingView>
   );
 }
