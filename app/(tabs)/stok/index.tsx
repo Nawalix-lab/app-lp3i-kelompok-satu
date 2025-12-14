@@ -17,9 +17,11 @@ type Product = {
   unit: string;
   description?: string;
   user_id: string;
+  barcode?: string;
 };
 
 import { useColorScheme } from "nativewind";
+import Barcode from "react-native-barcode-builder";
 
 export default function StokScreen() {
   const router = useRouter();
@@ -31,17 +33,51 @@ export default function StokScreen() {
   const [selectedItem, setSelectedItem] = useState<Product | null>(null);
   const [user, setUser] = useState<any>(null);
   const [filterCategory, setFilterCategory] = useState("Semua");
+  const [categories, setCategories] = useState<string[]>(["Semua"]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
 
 
   // Ambil user saat komponen mount
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+    const initUserAndCategories = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user) return;
+
+        setUser(data.user);
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("store_type_id")
+          .eq("id", data.user.id)
+          .single();
+
+        let fetchedCategories = ["Semua"];
+
+        if (profile?.store_type_id) {
+          const { data: cats } = await supabase
+            .from("master_categories")
+            .select("name")
+            .eq("store_type_id", profile.store_type_id);
+
+          if (cats?.length) {
+            fetchedCategories = ["Semua", ...cats.map(c => c.name)];
+          }
+        }
+
+        setCategories(fetchedCategories);
+        setFilterCategory("Semua");
+      } catch (err) {
+        console.error("Init user & kategori gagal:", err);
+      } finally {
+        setIsLoadingCategories(false);
+      }
     };
 
-    getUser();
+    initUserAndCategories();
   }, []);
+
 
 
   const fetchProducts = async () => {
@@ -119,15 +155,9 @@ export default function StokScreen() {
     router.push({ pathname: "/(tabs)/stok/edit", params: { id: item.id } });
   };
 
-  const getCategoryColor = (cat) => {
-    if (cat === 'Makanan') return { bg: 'bg-orange-100', text: 'text-orange-700' };
-    if (cat === 'Minuman') return { bg: 'bg-blue-100', text: 'text-blue-700' };
-    if (cat === 'Snack') return { bg: 'bg-pink-100', text: 'text-pink-700' };
-    return { bg: 'bg-purple-100', text: 'text-purple-700' };
-  };
 
   const renderItem = ({ item }: { item: Product }) => {
-    const colors = getCategoryColor(item.category);
+
     return (
       <TouchableOpacity
         onPress={() => { setSelectedItem(item); setDetailModalVisible(true); }}
@@ -141,8 +171,8 @@ export default function StokScreen() {
 
           <View className="flex-row items-center gap-2">
             {/* Badge Kategori */}
-            <View className={`px-2 py-0.5 rounded ${colors.bg}`}>
-              <Text className={`text-[10px] ${colors.text} font-medium`}>{item.category || 'Lain-lain'}</Text>
+            <View className={`px-2 py-0.5 rounded `}>
+              <Text className={`text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium`}>{item.category || 'Lain-lain'}</Text>
             </View>
             {/* Stok Info */}
             <Text className="text-xs text-gray-500 dark:text-gray-400">
@@ -159,14 +189,6 @@ export default function StokScreen() {
             className="w-9 h-9 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-xl items-center justify-center active:bg-blue-100 dark:active:bg-blue-800"
           >
             <Ionicons name="pencil" size={16} color={colorScheme === 'dark' ? '#60A5FA' : '#2563EB'} />
-          </TouchableOpacity>
-
-          {/* Tombol Delete */}
-          <TouchableOpacity
-            onPress={() => handleDelete(item)}
-            className="w-9 h-9 bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-800 rounded-xl items-center justify-center active:bg-red-100 dark:active:bg-red-800"
-          >
-            <Ionicons name="trash-outline" size={16} color={colorScheme === 'dark' ? '#F87171' : '#EF4444'} />
           </TouchableOpacity>
         </View>
 
@@ -202,17 +224,29 @@ export default function StokScreen() {
 
         {/* FILTER TABS */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
-          {["Semua", "Makanan", "Minuman", "Snack", "Lain-lain"].map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              onPress={() => setFilterCategory(cat)}
-              className={`px-4 py-2 rounded-full border mr-2 ${filterCategory === cat ? 'bg-blue-600 border-blue-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'}`}
-            >
-              <Text className={`text-xs font-medium ${filterCategory === cat ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {isLoadingCategories ? (
+            <Text className="text-gray-400 text-xs px-2">Memuat kategori...</Text>
+          ) : (
+            categories.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                onPress={() => setFilterCategory(cat)}
+                className={`px-4 py-2 rounded-full border mr-2 ${filterCategory === cat
+                  ? "bg-blue-600 border-blue-600"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600"
+                  }`}
+              >
+                <Text
+                  className={`text-xs font-medium ${filterCategory === cat
+                    ? "text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </ScrollView>
       </View>
 
@@ -248,31 +282,76 @@ export default function StokScreen() {
       {/* DETAIL MODAL */}
       <Modal visible={detailModalVisible} transparent animationType="slide">
         <View className="flex-1 justify-end bg-black/40">
-          <View className="bg-white dark:bg-gray-900 rounded-t-3xl p-6 h-[60%]">
-            <View className="items-center mb-4"><View className="w-16 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" /></View>
+          <View className="bg-white dark:bg-gray-900 rounded-t-3xl p-6 h-[70%]">
+            {/* Drag handle */}
+            <View className="items-center mb-4">
+              <View className="w-16 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            </View>
+
             {selectedItem && (
-              <ScrollView>
-                <Text className="text-2xl font-bold text-center mb-2 text-gray-900 dark:text-white">{selectedItem.name}</Text>
+              <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+                {/* Nama produk */}
+                <Text className="text-2xl font-bold text-center mb-2 text-gray-900 dark:text-white">
+                  {selectedItem.name}
+                </Text>
+
+                {/* Kategori */}
                 <View className="flex-row justify-center mb-6">
-                  <View className={`px-3 py-1 rounded-full ${getCategoryColor(selectedItem.category).bg}`}>
-                    <Text className={getCategoryColor(selectedItem.category).text}>{selectedItem.category}</Text>
+                  <View className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900">
+                    <Text className="text-blue-700 dark:text-blue-300">
+                      {selectedItem.category}
+                    </Text>
                   </View>
                 </View>
+
+                {/* Barcode / QR */}
+                <View className="items-center mb-6">
+                  {/* <Barcode
+                    value={selectedItem.barcode || selectedItem.id.toString()}
+                    format="CODE128"
+                    width={2}
+                    height={80}
+                    lineColor="#000"
+                    background="#fff"
+                  /> */}
+                  <Text className="mt-2 text-gray-500 dark:text-gray-400 text-sm">
+                    {selectedItem.barcode}
+                  </Text>
+                </View>
+
+                {/* Harga & Stok */}
                 <View className="flex-row gap-4 mb-4">
-                  <View className="flex-1 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <View className="flex-1 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                     <Text className="text-gray-500 dark:text-gray-400 text-xs">Harga</Text>
-                    <Text className="text-lg font-bold text-gray-900 dark:text-white">Rp {selectedItem.price ? selectedItem.price.toLocaleString() : '0'}</Text>
+                    <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                      Rp {selectedItem.price?.toLocaleString() || "0"}
+                    </Text>
                   </View>
-                  <View className="flex-1 bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <View className="flex-1 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                     <Text className="text-gray-500 dark:text-gray-400 text-xs">Stok</Text>
-                    <Text className="text-lg font-bold text-gray-900 dark:text-white">{selectedItem.stock} {selectedItem.unit}</Text>
+                    <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                      {selectedItem.stock} {selectedItem.unit}
+                    </Text>
                   </View>
                 </View>
-                <Text className="font-bold mb-1 text-gray-900 dark:text-white">Deskripsi:</Text>
-                <Text className="text-gray-600 dark:text-gray-300">{selectedItem.description || '-'}</Text>
+
+                {/* Deskripsi */}
+                <View className="mb-4">
+                  <Text className="font-bold text-gray-900 dark:text-white mb-1">Deskripsi:</Text>
+                  <Text className="text-gray-600 dark:text-gray-300">
+                    {selectedItem.description || "-"}
+                  </Text>
+                </View>
+
+                {/* Tombol tutup */}
+                <TouchableOpacity
+                  onPress={() => setDetailModalVisible(false)}
+                  className="bg-gray-200 dark:bg-gray-800 py-3 rounded-xl items-center mt-4"
+                >
+                  <Text className="text-gray-900 dark:text-white font-semibold">Tutup</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
-            <TouchableOpacity onPress={() => setDetailModalVisible(false)} className="bg-gray-200 dark:bg-gray-800 mt-4 py-3 rounded-xl items-center"><Text className="text-gray-900 dark:text-white">Tutup</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>

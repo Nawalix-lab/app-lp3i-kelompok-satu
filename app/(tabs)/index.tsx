@@ -149,12 +149,14 @@ export default function HomeScreen() {
         .lte("created_at", end);
 
       const revenue = trx?.reduce((sum, t) => sum + t.total_amount, 0) || 0;
+      const todayDate = today.toISOString().split("T")[0];
 
       setStats({
         totalProducts: totalProds,
         lowStock: lowStk,
         todayTransactions: trx?.length || 0,
         todayRevenue: revenue,
+        todayDate,
       });
     } catch (err) {
       console.log("Error fetching dashboard:", err);
@@ -230,19 +232,6 @@ export default function HomeScreen() {
   const initial = (userName || "U").charAt(0).toUpperCase();
 
   // ====================== LOGOUT =========================
-  function signOut() {
-    Alert.alert("Keluar Akun", "Yakin ingin keluar dari kaStok?", [
-      { text: "Batal", style: "cancel" },
-      {
-        text: "Keluar",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace("/(auth)/login");
-        },
-      },
-    ]);
-  }
 
   // ====================== LOADING =========================
   if (loading && !session) {
@@ -381,7 +370,10 @@ export default function HomeScreen() {
             <Text className="text-xs text-gray-500">Stok Menipis</Text>
           </TouchableOpacity>
 
-          <View className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 items-center shadow-sm">
+          <TouchableOpacity
+            className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 items-center shadow-sm"
+            onPress={() => router.push(`/(tabs)/laporan/detail-harian?date=${stats.todayDate}`)} // arahkan ke halaman detail
+          >
             <View className="h-10 w-10 bg-green-50 rounded-full items-center justify-center mb-2">
               <MaterialCommunityIcons name="receipt" size={24} color="#16A34A" />
             </View>
@@ -389,7 +381,7 @@ export default function HomeScreen() {
               {stats.todayTransactions}
             </Text>
             <Text className="text-xs text-gray-500">Trx Hari Ini</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* ================= MENU UTAMA ================= */}
@@ -448,7 +440,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        
+
       </ScrollView >
 
       {/* ================= FAB ================= */}

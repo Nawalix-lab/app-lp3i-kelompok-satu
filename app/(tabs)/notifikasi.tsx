@@ -108,13 +108,7 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada export defaul
         </View>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
+    
         {loading ? (
           <View className="mt-10 items-center">
             <ActivityIndicator size="large" />
@@ -161,7 +155,6 @@ export default function NotifikasiScreen() {   // ⬅️ HARUS ada export defaul
           />
 
         )}
-      </ScrollView>
     </SafeAreaView>
   );
 }

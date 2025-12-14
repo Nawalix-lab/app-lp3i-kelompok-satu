@@ -64,7 +64,7 @@ const groupTransactionsByDay = (transactions: any[]) => {
 
     acc[dateKey].totalTrx += 1; // Menghitung jumlah transaksi per hari
 
-    
+
 
     return acc;
 
@@ -128,7 +128,7 @@ export default function LaporanScreen() {
 
     // Jika tidak ada user, atur loading menjadi false untuk menghindari loop tak terbatas
 
-    setLoading(false); 
+    setLoading(false);
 
     return null;
 
@@ -144,17 +144,17 @@ export default function LaporanScreen() {
 
     if (!currentUserId) {
 
-        console.log("No user ID found. Skipping data fetch.");
+      console.log("No user ID found. Skipping data fetch.");
 
-        setLoading(false);
+      setLoading(false);
 
-        setRefreshing(false);
+      setRefreshing(false);
 
-        return;
+      return;
 
     }
 
-    
+
 
     try {
 
@@ -172,7 +172,7 @@ export default function LaporanScreen() {
 
         .limit(100);
 
-      
+
 
       if (error) throw error;
 
@@ -240,25 +240,25 @@ export default function LaporanScreen() {
 
   // Menggunakan useFocusEffect untuk mengambil User ID dan data saat screen fokus
 
-  useFocusEffect(useCallback(() => { 
+  useFocusEffect(useCallback(() => {
 
-      const loadData = async () => {
+    const loadData = async () => {
 
-          setLoading(true);
+      setLoading(true);
 
-          const id = await getUserId();
+      const id = await getUserId();
 
-          // Panggil fetchData hanya jika ID user berhasil didapatkan
+      // Panggil fetchData hanya jika ID user berhasil didapatkan
 
-          if (id) {
+      if (id) {
 
-            fetchData(id);
+        fetchData(id);
 
-          }
+      }
 
-      };
+    };
 
-      loadData();
+    loadData();
 
   }, []));
 
@@ -272,29 +272,29 @@ export default function LaporanScreen() {
 
     if (userId) {
 
-        fetchData(userId);
+      fetchData(userId);
 
     } else {
 
-        // Jika userId belum ada, coba dapatkan lagi
+      // Jika userId belum ada, coba dapatkan lagi
 
-        const loadDataOnRefresh = async () => {
+      const loadDataOnRefresh = async () => {
 
-            const id = await getUserId();
+        const id = await getUserId();
 
-            if (id) {
+        if (id) {
 
-                fetchData(id);
+          fetchData(id);
 
-            } else {
+        } else {
 
-                setRefreshing(false);
+          setRefreshing(false);
 
-            }
+        }
 
-        };
+      };
 
-        loadDataOnRefresh();
+      loadDataOnRefresh();
 
     }
 
@@ -305,38 +305,28 @@ export default function LaporanScreen() {
   // Format Tanggal untuk Tampilan
 
   const formatDateForDisplay = (dateString: string) => {
-
     const date = new Date(dateString);
 
-    const today = new Date();
+    // Ambil tanggal sekarang dan kemarin di WIB
+    const now = new Date();
+    const options = { timeZone: 'Asia/Jakarta', hour12: false };
+    const todayStr = now.toLocaleDateString('id-ID', options);
 
-    const yesterday = new Date(today);
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('id-ID', options);
 
-    yesterday.setDate(today.getDate() - 1);
+    const dateStr = date.toLocaleDateString('id-ID', options);
 
+    if (dateStr === todayStr) return "Hari Ini";
+    if (dateStr === yesterdayStr) return "Kemarin";
 
-
-    if (date.toDateString() === today.toDateString()) {
-
-        return "Hari Ini";
-
-    }
-
-    if (date.toDateString() === yesterday.toDateString()) {
-
-        return "Kemarin";
-
-    }
-
-
-
-    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
-
-    return date.toLocaleDateString('id-ID', options);
-
+    // Format tanggal lain
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
   };
 
-  
+
+
 
   // Format Mata Uang ringkas (untuk chart)
 
@@ -360,29 +350,29 @@ export default function LaporanScreen() {
 
   };
 
-  
+
 
   // Format Mata Uang standar (dengan Rp)
 
   const formatStandardCurrency = (amount: number) => {
 
-      return `Rp ${amount.toLocaleString('id-ID')}`;
+    return `Rp ${amount.toLocaleString('id-ID')}`;
 
   };
 
-  
+
 
   // --- FUNGSI BARU UNTUK NAVIGASI ---
 
   const handleDailyItemPress = (date: string) => {
 
-      router.push({
+    router.push({
 
-          pathname: "laporan/detail-harian",
+      pathname: "laporan/detail-harian",
 
-          params: { date: date } // Kirim tanggal (YYYY-MM-DD) sebagai parameter
+      params: { date: date } // Kirim tanggal (YYYY-MM-DD) sebagai parameter
 
-      });
+    });
 
   };
 
@@ -408,31 +398,31 @@ export default function LaporanScreen() {
 
       <View className="flex-row items-center">
 
-          <View className="w-10 h-10 bg-blue-50 rounded-full items-center justify-center mr-3">
+        <View className="w-10 h-10 bg-blue-50 rounded-full items-center justify-center mr-3">
 
-              <Ionicons name="calendar-outline" size={20} color="#2563EB" />
+          <Ionicons name="calendar-outline" size={20} color="#2563EB" />
 
-          </View>
+        </View>
 
-          <View>
+        <View>
 
-              <Text className="font-bold text-gray-900">{formatDateForDisplay(item.date)}</Text>
+          <Text className="font-bold text-gray-900">{formatDateForDisplay(item.date)}</Text>
 
-              <Text className="text-xs text-gray-500">{item.totalTrx} Transaksi</Text>
+          <Text className="text-xs text-gray-500">{item.totalTrx} Transaksi</Text>
 
-          </View>
+        </View>
 
       </View>
 
       <View className="items-end">
 
-          <Text className="font-bold text-base text-gray-900">{formatStandardCurrency(item.omzet)}</Text>
+        <Text className="font-bold text-base text-gray-900">{formatStandardCurrency(item.omzet)}</Text>
 
-          <Text className={`text-xs ${item.profit > 0 ? 'text-green-600' : 'text-red-600'} font-medium`}>
+        <Text className={`text-xs ${item.profit > 0 ? 'text-green-600' : 'text-red-600'} font-medium`}>
 
-              Profit: {formatStandardCurrency(item.profit)}
+          Profit: {formatStandardCurrency(item.profit)}
 
-          </Text>
+        </Text>
 
       </View>
 
@@ -450,7 +440,7 @@ export default function LaporanScreen() {
 
     const chartData = dailyTransactions.slice(0, 7).reverse();
 
-    
+
 
     if (chartData.length === 0) {
 
@@ -616,7 +606,7 @@ export default function LaporanScreen() {
 
       <StatusBar style="dark" />
 
-      
+
 
       {/* Header */}
 
@@ -624,19 +614,19 @@ export default function LaporanScreen() {
 
         <View className="flex-row items-center justify-between">
 
-            <View>
+          <View>
 
-                <Text className="text-2xl font-bold text-gray-900">Laporan Keuangan</Text>
+            <Text className="text-2xl font-bold text-gray-900">Laporan Keuangan</Text>
 
-                <Text className="text-gray-500 text-xs">Ringkasan performa bisnis Anda</Text>
+            <Text className="text-gray-500 text-xs">Ringkasan performa bisnis Anda</Text>
 
-            </View>
+          </View>
 
-            <TouchableOpacity onPress={onRefresh} className="bg-gray-100 p-2 rounded-full">
+          <TouchableOpacity onPress={onRefresh} className="bg-gray-100 p-2 rounded-full">
 
-                <Ionicons name="refresh" size={20} color="#374151" />
+            <Ionicons name="refresh" size={20} color="#374151" />
 
-            </TouchableOpacity>
+          </TouchableOpacity>
 
         </View>
 
@@ -654,57 +644,57 @@ export default function LaporanScreen() {
 
       >
 
-        
+
 
         {/* SECTION 1: KARTU RINGKASAN */}
 
         <View className="px-5 mt-6 mb-6">
 
-            {/* Card Profit (Highlight) */}
+          {/* Card Profit (Highlight) */}
 
-            <View className="bg-blue-600 rounded-3xl p-6 shadow-lg shadow-blue-200 mb-4 overflow-hidden relative">
+          <View className="bg-blue-600 rounded-3xl p-6 shadow-lg shadow-blue-200 mb-4 overflow-hidden relative">
 
-                <View className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10" />
+            <View className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10" />
 
-                
 
-                <View className="flex-row items-center mb-2">
 
-                    <MaterialCommunityIcons name="wallet-outline" size={20} color="white" style={{opacity:0.8}} />
+            <View className="flex-row items-center mb-2">
 
-                    <Text className="text-blue-100 font-medium text-xs ml-2 uppercase tracking-wide">Laba Bersih (Profit)</Text>
+              <MaterialCommunityIcons name="wallet-outline" size={20} color="white" style={{ opacity: 0.8 }} />
 
-                </View>
-
-                <Text className="text-4xl font-bold text-white mb-1">
-
-                    {formatStandardCurrency(summary.profit)}
-
-                </Text>
-
-                <Text className="text-blue-200 text-xs">Keuntungan bersih setelah dikurangi modal dari {summary.totalTrx} transaksi.</Text>
+              <Text className="text-blue-100 font-medium text-xs ml-2 uppercase tracking-wide">Laba Bersih (Profit)</Text>
 
             </View>
 
+            <Text className="text-4xl font-bold text-white mb-1">
+
+              {formatStandardCurrency(summary.profit)}
+
+            </Text>
+
+            <Text className="text-blue-200 text-xs">Keuntungan bersih setelah dikurangi modal dari {summary.totalTrx} transaksi.</Text>
+
+          </View>
 
 
-            {/* Card Total Omzet - Full Width */}
 
-            <View className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+          {/* Card Total Omzet - Full Width */}
 
-                <Text className="text-gray-500 text-xs mb-1">Total Omzet</Text>
+          <View className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
 
-                <Text className="text-2xl font-bold text-gray-900">{formatStandardCurrency(summary.omzet)}</Text>
+            <Text className="text-gray-500 text-xs mb-1">Total Omzet</Text>
 
-                <View className="flex-row items-center mt-2">
+            <Text className="text-2xl font-bold text-gray-900">{formatStandardCurrency(summary.omzet)}</Text>
 
-                    <Ionicons name="arrow-up" size={14} color="#16A34A" />
+            <View className="flex-row items-center mt-2">
 
-                    <Text className="text-xs text-green-600 font-bold ml-1">Total Penjualan dari {summary.totalTrx} transaksi</Text>
+              <Ionicons name="arrow-up" size={14} color="#16A34A" />
 
-                </View>
+              <Text className="text-xs text-green-600 font-bold ml-1">Total Penjualan dari {summary.totalTrx} transaksi</Text>
 
             </View>
+
+          </View>
 
         </View>
 
@@ -714,27 +704,27 @@ export default function LaporanScreen() {
 
         <View className="px-5 mb-10">
 
-            <Text className="text-base font-bold text-gray-900 mb-3">Tren Penjualan Harian (7 Hari Terakhir)</Text>
+          <Text className="text-base font-bold text-gray-900 mb-3">Tren Penjualan Harian (7 Hari Terakhir)</Text>
 
-            {/* Chart container with gradient background */}
+          {/* Chart container with gradient background */}
 
-            <View className="bg-white rounded-2xl border border-purple-100 shadow-lg overflow-hidden">
+          <View className="bg-white rounded-2xl border border-purple-100 shadow-lg overflow-hidden">
 
-                {loading ? (
+            {loading ? (
 
-                    <View className="h-56 items-center justify-center">
+              <View className="h-56 items-center justify-center">
 
-                        <ActivityIndicator color="#8b5cf6" />
+                <ActivityIndicator color="#8b5cf6" />
 
-                    </View>
+              </View>
 
-                ) : (
+            ) : (
 
-                    renderSimpleLineChart()
+              renderSimpleLineChart()
 
-                )}
+            )}
 
-            </View>
+          </View>
 
         </View>
 
@@ -744,23 +734,23 @@ export default function LaporanScreen() {
 
         <View className="px-5 bg-white pt-6 pb-10 rounded-t-3xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
 
-            <Text className="text-base font-bold text-gray-900 mb-4">Ringkasan Penjualan Harian ({dailyTransactions.length} Hari)</Text>
+          <Text className="text-base font-bold text-gray-900 mb-4">Ringkasan Penjualan Harian ({dailyTransactions.length} Hari)</Text>
 
-            
 
-            {loading ? (
 
-                <ActivityIndicator color="#2563EB" />
+          {loading ? (
 
-            ) : dailyTransactions.length === 0 ? (
+            <ActivityIndicator color="#2563EB" />
 
-                <Text className="text-gray-400 text-center py-10">Belum ada ringkasan penjualan harian.</Text>
+          ) : dailyTransactions.length === 0 ? (
 
-            ) : (
+            <Text className="text-gray-400 text-center py-10">Belum ada ringkasan penjualan harian.</Text>
 
-                dailyTransactions.map(renderTransactionItem)
+          ) : (
 
-            )}
+            dailyTransactions.map(renderTransactionItem)
+
+          )}
 
         </View>
 

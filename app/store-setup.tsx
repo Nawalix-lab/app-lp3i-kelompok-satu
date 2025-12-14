@@ -5,31 +5,31 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
-  Image 
+  Image
 } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import "../global.css";
+import Toast from "react-native-toast-message";
 
 // Pastikan path logo benar
-const setupLogo = require("../assets/logo.png"); 
+const setupLogo = require("../assets/logo.png");
 
 export default function StoreSetupScreen() {
   const router = useRouter();
-  
+
   // State Form
   const [storeName, setStoreName] = useState("");
   const [storeType, setStoreType] = useState(""); // Hanya untuk tampilan teks input
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null); // PENTING: Ini yang disimpan
-  
+
   // State Data Database
   const [storeTypesList, setStoreTypesList] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -47,9 +47,9 @@ export default function StoreSetupScreen() {
           .from('master_store_types')
           .select('id, name')
           .order('name', { ascending: true });
-        
+
         if (error) throw error;
-        
+
         if (data) {
           setStoreTypesList(data);
         }
@@ -70,7 +70,7 @@ export default function StoreSetupScreen() {
       setErrors(prev => ({ ...prev, name: true }));
       hasError = true;
     }
-    
+
     // VALIDASI BARU: Cek apakah ID sudah terpilih
     // Kita memaksa user memilih dari list agar ID-nya valid
     if (!selectedTypeId) {
@@ -79,19 +79,31 @@ export default function StoreSetupScreen() {
     }
 
     if (hasError) {
-      Alert.alert(
-        "Data Belum Lengkap", 
-        !selectedTypeId && storeType 
-          ? "Silakan pilih Jenis Toko dari daftar yang muncul." 
-          : "Mohon isi Nama Toko dan pilih Jenis Toko."
-      );
+      Toast.show({
+        type: 'error',
+        text1: 'Data Belum Lengkap',
+        text2: !selectedTypeId && storeType
+          ? 'Silakan pilih Jenis Toko dari daftar'
+          : 'Mohon isi Nama Toko dan pilih Jenis Toko',
+        position: 'top',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesi pengguna hilang.");
+      if (!session) {
+        Toast.show({
+          type: 'error',
+          text1: 'Sesi pengguna tidak ditemukan',
+          text2: 'Mohon login kembali',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
 
       // 2. SIMPAN HANYA ID, TIDAK ADA LAGI STORE_TYPE TEXT
       const updates = {
@@ -105,14 +117,34 @@ export default function StoreSetupScreen() {
         .update(updates)
         .eq('id', session.user.id);
 
-      if (error) throw error;
+      if (error) {
+        Toast.show({
+          type: 'error',
+          text1: 'Gagal Menyimpan',
+          text2: error.message,
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
 
-      Alert.alert("Sukses", "Toko berhasil didaftarkan!", [
-        { text: "Masuk Dashboard", onPress: () => router.replace("/(tabs)") }
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: 'Sukses',
+        text2: 'Toko berhasil didaftarkan!',
+        position: 'top',
+        visibilityTime: 2500,
+      });
 
+      router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert("Gagal Menyimpan", error.message);
+      Toast.show({
+        type: 'error',
+        text1: 'Gagal Menyimpan',
+        text2: error.message,
+        position: 'top',
+        visibilityTime: 3000,
+      });
     } finally {
       setLoading(false);
     }
@@ -127,19 +159,19 @@ export default function StoreSetupScreen() {
       <TouchableWithoutFeedback onPress={() => { setShowDropdown(false); Keyboard.dismiss(); }}>
         <View className="flex-1 bg-white">
           <StatusBar style="dark" />
-          
-          <ScrollView 
+
+          <ScrollView
             className="flex-1"
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 100 }} 
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 100 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
 
             {/* === HEADER === */}
-            <View className="mb-8 mt-4 items-center"> 
-              <Image 
+            <View className="mb-8 mt-4 items-center">
+              <Image
                 source={setupLogo}
-                className="w-80 h-80 mb-0" 
+                className="w-80 h-80 mb-0"
                 resizeMode="contain"
               />
               <Text className="text-gray-500 text-base text-center px-4 -m-12 mb-4">
@@ -149,16 +181,15 @@ export default function StoreSetupScreen() {
 
             {/* Form Container */}
             <View className="gap-6">
-              
+
               {/* Input Nama Toko */}
               <View className="z-10">
                 <Text className="font-semibold text-gray-700 mb-2 ml-1">
                   Nama Toko <Text className="text-red-500">*</Text>
                 </Text>
                 <TextInput
-                  className={`border rounded-xl px-4 py-4 bg-gray-50 text-base text-gray-900 ${
-                    errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                  }`}
+                  className={`border rounded-xl px-4 py-4 bg-gray-50 text-base text-gray-900 ${errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
                   placeholder="Contoh: Toko Sembako Makmur"
                   placeholderTextColor="#9CA3AF"
                   value={storeName}
@@ -171,33 +202,32 @@ export default function StoreSetupScreen() {
               </View>
 
               {/* Input Jenis Toko (Dropdown Dinamis) */}
-              <View 
-                className="relative mb-2" 
+              <View
+                className="relative mb-2"
                 style={{ zIndex: 1000, elevation: 10 }}
               >
                 <Text className="font-semibold text-gray-700 mb-2 ml-1">
                   Jenis Toko <Text className="text-red-500">*</Text>
                 </Text>
-                
+
                 <View>
                   <TextInput
-                    className={`border rounded-xl px-4 py-4 bg-gray-50 text-base text-gray-900 pr-12 ${
-                      errors.type ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                    }`}
+                    className={`border rounded-xl px-4 py-4 bg-gray-50 text-base text-gray-900 pr-12 ${errors.type ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                      }`}
                     placeholder="Pilih dari daftar..."
                     placeholderTextColor="#9CA3AF"
                     value={storeType}
                     onChangeText={(text) => {
                       setStoreType(text);
                       // Reset ID saat user mengetik manual, memaksa mereka memilih dari dropdown
-                      setSelectedTypeId(null); 
+                      setSelectedTypeId(null);
                       setShowDropdown(true);
                       if (text) setErrors(prev => ({ ...prev, type: false }));
                     }}
                     onFocus={() => setShowDropdown(true)}
                   />
-                  
-                  <TouchableOpacity 
+
+                  <TouchableOpacity
                     onPress={() => {
                       Keyboard.dismiss();
                       setShowDropdown(!showDropdown);
@@ -212,12 +242,12 @@ export default function StoreSetupScreen() {
 
                 {/* List Dropdown dari Database */}
                 {showDropdown && (
-                  <View 
+                  <View
                     className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-hidden"
                     style={{ zIndex: 2000, elevation: 20 }}
                   >
-                    <ScrollView 
-                      nestedScrollEnabled={true} 
+                    <ScrollView
+                      nestedScrollEnabled={true}
                       keyboardShouldPersistTaps="handled"
                       showsVerticalScrollIndicator={true}
                     >
@@ -250,12 +280,12 @@ export default function StoreSetupScreen() {
                           <Text className="text-gray-400">Tidak ada data</Text>
                         </View>
                       )}
-                      
+
                       {/* Pesan jika tidak ada hasil filter */}
                       {!loadingData && storeTypesList.length > 0 && storeTypesList.filter(item => item.name.toLowerCase().includes(storeType.toLowerCase())).length === 0 && (
-                         <View className="p-4 items-center">
-                            <Text className="text-gray-400 text-xs">Tipe tidak ditemukan di daftar</Text>
-                         </View>
+                        <View className="p-4 items-center">
+                          <Text className="text-gray-400 text-xs">Tipe tidak ditemukan di daftar</Text>
+                        </View>
                       )}
                     </ScrollView>
                   </View>
@@ -263,13 +293,12 @@ export default function StoreSetupScreen() {
               </View>
 
               {/* Tombol Simpan */}
-              <View style={{ zIndex: 1, elevation: 1 }}> 
+              <View style={{ zIndex: 1, elevation: 1 }}>
                 <TouchableOpacity
                   onPress={handleUpdateProfile}
                   disabled={loading}
-                  className={`rounded-xl py-4 mt-6 shadow-sm flex-row justify-center items-center ${
-                    loading ? 'bg-gray-400' : 'bg-blue-600 active:bg-blue-700'
-                  }`}
+                  className={`rounded-xl py-4 mt-6 shadow-sm flex-row justify-center items-center ${loading ? 'bg-gray-400' : 'bg-blue-600 active:bg-blue-700'
+                    }`}
                 >
                   {loading ? (
                     <ActivityIndicator color="white" />

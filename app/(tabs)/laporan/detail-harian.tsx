@@ -291,10 +291,10 @@ export default function DetailTransaksiHarian() {
             }
 
             const currentUserId = user.id;
-            const startOfDay = `${date}T00:00:00.000Z`;
+            const startOfDay = new Date(`${date}T00:00:00`).toISOString();
             const nextDay = new Date(Array.isArray(date) ? date[0] : date);
             nextDay.setDate(nextDay.getDate() + 1);
-            const startOfNextDay = nextDay.toISOString().split('T')[0] + 'T00:00:00.000Z';
+            const startOfNextDay = new Date(new Date(`${date}T00:00:00`).setDate(new Date(`${date}T00:00:00`).getDate() + 1)).toISOString();
 
             const { data, error } = await supabase
                 .from('transactions')

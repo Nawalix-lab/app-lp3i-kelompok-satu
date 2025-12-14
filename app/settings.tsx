@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 
 export default function SettingsScreen() {
-    const router = useRouter();
     const navigation = useNavigation();
     const { colorScheme, toggleColorScheme } = useColorScheme();
 

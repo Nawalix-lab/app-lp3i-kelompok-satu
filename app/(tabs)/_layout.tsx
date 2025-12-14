@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
+import Toast from 'react-native-toast-message';
 
 export default function AppLayout() {
   return (
+    <>
     <Stack>
       {/* Halaman utama / root */}
       <Stack.Screen
@@ -21,7 +23,7 @@ export default function AppLayout() {
 
       <Stack.Screen
         name="profile/edit-profile"
-        options={{ headerShown: false, headerBackTitleVisible: false}}
+        options={{ headerShown: false, headerBackTitleVisible: false }}
       />
 
       <Stack.Screen
@@ -37,7 +39,12 @@ export default function AppLayout() {
         name="stok/index"
         options={{ headerShown: false }}
       />
-      
+
+      <Stack.Screen
+        name="stok/edit"
+        options={{ headerShown: false }}
+      />
+
       <Stack.Screen
         name="stok/tambah"
         options={{
@@ -67,7 +74,7 @@ export default function AppLayout() {
       />
 
 
-      
+
       <Stack.Screen
         name="stok/masuk"
         options={{
@@ -89,5 +96,7 @@ export default function AppLayout() {
         }}
       />
     </Stack>
+    <Toast />
+    </>
   );
 }

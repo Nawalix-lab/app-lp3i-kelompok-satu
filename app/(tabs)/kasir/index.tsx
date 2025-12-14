@@ -30,6 +30,7 @@ interface Product {
     stock: number;
     price: number;
     purchase_price: number | null;
+    min_stock: number;
 }
 
 // Tentukan tipe data Cart Item
@@ -54,26 +55,46 @@ export default function KasirScreen() {
     const [lastTrx, setLastTrx] = useState<any>(null);
 
     // Pembayaran
-    // amountPaidStr digunakan untuk input (string). Kita konversi ke angka untuk perhitungan
     const [amountPaidStr, setAmountPaidStr] = useState<string>("");
-    // scanned state kamera
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+    const [storeName, setStoreName] = useState<string>('');
+
+
+    // Custom Toast
+    const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+    const showToast = (type: 'success' | 'error' | 'info', text: string, duration: number = 3000) => {
+        setToastMessage({ type, text });
+        setTimeout(() => setToastMessage(null), duration);
+    };
+
+    const [profile, setProfile] = useState<any>(null);
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        const getSessionAndData = async () => {
+            // Ambil session Supabase
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
             setSession(session);
-            if (session) {
-                fetchProducts(session.user.id);
-            } else {
-                router.replace('/(auth)/login');
-            }
-        });
+
+            // Fetch profile
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+            if (!profileError) setProfile(profileData);
+
+            // Fetch products
+            await fetchProducts(session.user.id);
+        };
+
+        getSessionAndData();
     }, []);
+
 
     const fetchProducts = async (userId: string) => {
         setLoading(true);
-        // Ambil data produk
         const { data, error } = await supabase.from('products').select('*, purchase_price:buy_price').eq('user_id', userId).order('name');
         if (error) {
             Alert.alert("Error", error.message);
@@ -83,26 +104,25 @@ export default function KasirScreen() {
         setLoading(false);
     };
 
-    // --- FUNGSI KERANJANG UTAMA ---
-
+    // --- Keranjang ---
     const addToCart = (product: Product, quantity: number = 1) => {
         const existing = cart.find(item => item.id === product.id);
 
         if (product.stock <= 0) {
-            Alert.alert("Stok Habis", `${product.name} memiliki stok 0.`);
+            showToast("error", `${product.name} memiliki stok 0.`);
             return;
         }
 
         if (existing) {
             const newQty = existing.qty + quantity;
             if (newQty > product.stock) {
-                Alert.alert("Stok Tidak Cukup", `Stok ${product.name} hanya tersedia ${product.stock}.`);
+                showToast("error", `Stok ${product.name} hanya tersedia ${product.stock}.`);
                 return;
             }
             setCart(cart.map(item => item.id === product.id ? { ...item, qty: newQty } : item));
         } else {
             if (quantity > product.stock) {
-                Alert.alert("Stok Tidak Cukup", `Stok ${product.name} hanya tersedia ${product.stock}.`);
+                showToast("error", `Stok ${product.name} hanya tersedia ${product.stock}.`);
                 return;
             }
             setCart([...cart, { ...product, qty: quantity }]);
@@ -119,7 +139,7 @@ export default function KasirScreen() {
                 if (!product) return item;
                 const newQty = item.qty + delta;
                 if (newQty > product.stock) {
-                    Alert.alert("Stok Tidak Cukup", `Stok ${item.name} hanya tersedia ${product.stock}.`);
+                    showToast("error", `Stok ${item.name} hanya tersedia ${product.stock}.`);
                     return item;
                 }
                 if (newQty < 1) {
@@ -134,23 +154,17 @@ export default function KasirScreen() {
 
     const totalBelanja = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-    // Hitung jumlah bayar (number) dan kembalian
     const parseCurrencyToNumber = (s: string) => {
         if (!s) return 0;
-        // Buang semua selain digit
         const digits = s.replace(/\D/g, '');
         return digits ? parseInt(digits, 10) : 0;
     };
     const amountPaidNumber = parseCurrencyToNumber(amountPaidStr);
     const changeNumber = amountPaidNumber - totalBelanja;
 
-    // Format rupiah kecil
-    const formatRupiah = (n: number) => {
-        return n.toLocaleString('id-ID');
-    };
+    const formatRupiah = (n: number) => n.toLocaleString('id-ID');
 
-    // --- FUNGSI SCANNER BARCODE ---
-
+    // --- Scanner ---
     const handleScanPress = async () => {
         if (!permission?.granted) {
             const { granted } = await requestPermission();
@@ -164,151 +178,35 @@ export default function KasirScreen() {
     };
 
     const handleBarCodeScanned = ({ data }: { type: string, data: string }) => {
+        if (scanned) return;
         setScanned(true);
-        setModalScannerVisible(false);
         Vibration.vibrate();
 
         const productFound = products.find(p => p.barcode === data || p.sku === data);
 
-        if (productFound && productFound.stock > 0) {
-            addToCart(productFound);
+        if (!productFound) {
+            showToast("error", `Barcode/SKU ${data} tidak terdaftar.`);
+        } else if (productFound.stock <= 0) {
+            showToast("error", `Produk ${productFound.name} stoknya habis.`);
         } else {
-            Alert.alert("Produk Tidak Ditemukan", `Barcode/SKU ${data} tidak terdaftar atau stoknya habis.`);
+            if (productFound.stock <= productFound.min_stock) {
+                showToast("info", `Produk ${productFound.name} tersisa ${productFound.stock} saja.`);
+            }
+            addToCart(productFound);
         }
 
         setTimeout(() => setScanned(false), 1000);
     };
 
-    // --- FUNGSI PRINT / EXPORT PDF BARU ---
-
-    const htmlContent = (trxData: any) => `
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-            <style>
-                body {
-                    font-family: 'monospace', 'Courier New', monospace;
-                    padding: 15px;
-                    margin: 0;
-                    font-size: 10px;
-                    line-height: 1.4;
-                    color: #000;
-                    width: 250px;
-                }
-                .center { text-align: center; }
-                .right { text-align: right; }
-                .divider {
-                    border-bottom: 1px dashed #999;
-                    margin: 8px 0;
-                    height: 1px;
-                    overflow: hidden;
-                }
-                .total-row {
-                    font-size: 14px;
-                    font-weight: bold;
-                    margin-top: 10px;
-                }
-                .item-row {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 3px;
-                }
-                .item-name { flex: 1; margin-right: 5px; }
-                .item-qty-price { width: 40px; text-align: right; }
-                .item-subtotal { width: 60px; text-align: right; }
-                .small { font-size: 9px; color: #555; }
-            </style>
-        </head>
-        <body>
-            <div class="center">
-                <h3>kaStok Store</h3>
-                <p style="margin: 0;">Jl. Digital No. 1</p>
-                <p style="margin: 0;">Telp: 0812-3456-7890</p>
-            </div>
-            <div class="divider"></div>
-
-            <div style="display: flex; justify-content: space-between; font-size: 9px;">
-                <span>No. Order: #${trxData.id}</span>
-                <span class="right">${trxData.date}</span>
-            </div>
-
-            <div class="divider"></div>
-
-            ${trxData.items.map((item: any) => `
-                <div class="item-row">
-                    <span class="item-name">${item.name}</span>
-                    <span class="item-qty-price">${item.qty} x</span>
-                    <span class="item-subtotal">${(item.qty * item.price).toLocaleString('id-ID')}</span>
-                </div>
-            `).join('')}
-
-            <div class="divider"></div>
-
-            <div class="item-row total-row">
-                <span>TOTAL</span>
-                <span class="item-subtotal">Rp ${trxData.total.toLocaleString('id-ID')}</span>
-            </div>
-
-            <div style="margin-top:8px; font-size:11px;">
-                <div style="display:flex; justify-content:space-between;">
-                    <span>Bayar</span>
-                    <span>Rp ${trxData.paid ? trxData.paid.toLocaleString('id-ID') : '0'}</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; margin-top:4px;">
-                    <span>Kembalian</span>
-                    <span>Rp ${trxData.change ? trxData.change.toLocaleString('id-ID') : '0'}</span>
-                </div>
-            </div>
-
-            <div class="divider" style="margin-top: 15px;"></div>
-            <p class="center" style="font-size: 10px;">--- TERIMA KASIH ---</p>
-        </body>
-        </html>
-    `;
-
-    const print = async (action: 'print' | 'pdf') => {
-        if (!lastTrx) {
-            Alert.alert("Tidak ada data struk", "Silakan lakukan transaksi terlebih dahulu.");
-            return;
-        }
-        setLoading(true);
-
-        const html = htmlContent(lastTrx);
-
-        try {
-            if (action === 'print') {
-                await Print.printAsync({ html });
-                Alert.alert("Cetak", "Instruksi cetak telah dikirim.");
-            } else if (action === 'pdf') {
-                const { uri } = await Print.printToFileAsync({ html, base64: false });
-
-                if (uri) {
-                    if (await Sharing.isAvailableAsync()) {
-                        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: '.pdf', dialogTitle: 'Bagikan Struk Transaksi' });
-                    } else {
-                        Alert.alert("PDF Tersedia", "File PDF telah dibuat. Silakan cek unduhan Anda.");
-                    }
-                }
-            }
-        } catch (error: any) {
-            Alert.alert(`Gagal ${action === 'print' ? 'Mencetak' : 'Membuat PDF'}`, error.message || "Terjadi kesalahan.");
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // --- FUNGSI CHECKOUT ---
-
+    // --- Checkout ---
     const handleCheckout = async () => {
         setLoading(true);
         try {
             if (cart.length === 0) throw new Error("Keranjang belanja kosong.");
             if (!session?.user?.id) throw new Error("Sesi pengguna tidak valid. Silakan login ulang.");
 
-            // Validasi pembayaran
             if (amountPaidNumber < totalBelanja) {
-                throw new Error("Jumlah bayar kurang dari total. Mohon masukkan jumlah bayar yang sesuai.");
+                throw new Error("Jumlah bayar kurang dari total.");
             }
 
             let totalProfit = 0;
@@ -318,14 +216,11 @@ export default function KasirScreen() {
 
             for (const item of cart) {
                 const product = productsInCart.find(p => p?.id === item.id);
-
                 if (!product) throw new Error(`Produk dengan ID ${item.id} tidak ditemukan.`);
-
                 if (item.qty > item.stock) throw new Error(`Stok ${item.name} tidak mencukupi.`);
 
                 const buyPrice = item.purchase_price ?? 0;
-                const profitPerItem = (item.price - buyPrice);
-                totalProfit += (profitPerItem * item.qty);
+                totalProfit += (item.price - buyPrice) * item.qty;
 
                 itemMovements.push({
                     product_id: item.id,
@@ -336,7 +231,6 @@ export default function KasirScreen() {
                 });
             }
 
-            // 1. Simpan Transaksi
             const { data: trx, error: trxError } = await supabase
                 .from('transactions')
                 .insert({ total_amount: totalBelanja, total_profit: totalProfit, user_id: session.user.id })
@@ -349,7 +243,6 @@ export default function KasirScreen() {
                 notes: `${mov.notes} #${trx.id}`
             }));
 
-            // 2. Simpan Detail
             const transactionItemsData = cart.map(item => ({
                 transaction_id: trx.id,
                 product_id: item.id,
@@ -362,17 +255,14 @@ export default function KasirScreen() {
             const { error: itemError } = await supabase.from('transaction_items').insert(transactionItemsData);
             if (itemError) throw itemError;
 
-            // Update stok
             const updateStockPromises = cart.map(item =>
                 supabase.from('products').update({ stock: item.stock - item.qty }).eq('id', item.id).eq('user_id', session.user.id)
             );
             await Promise.all(updateStockPromises);
 
-            // Simpan stock movements
             const { error: movementError } = await supabase.from('stock_movements').insert(finalMovements);
             if (movementError) throw movementError;
 
-            // 3. Set Data Struk & Tampilkan Modal (sertakan bayar dan kembalian)
             setLastTrx({
                 id: trx.id,
                 date: new Date().toLocaleString('id-ID'),
@@ -382,18 +272,17 @@ export default function KasirScreen() {
                 change: changeNumber > 0 ? changeNumber : 0
             });
 
-            // Refresh data produk
             await fetchProducts(session.user.id);
 
             setLoading(false);
             setModalBayarVisible(false);
             setCart([]);
-            setAmountPaidStr(""); // reset input bayar
+            setAmountPaidStr("");
             setModalStrukVisible(true);
 
         } catch (error: any) {
             setLoading(false);
-            Alert.alert("Gagal Transaksi", error.message || "Terjadi kesalahan.");
+            showToast("error", error.message || "Terjadi kesalahan.");
         }
     };
 
@@ -413,13 +302,17 @@ export default function KasirScreen() {
             <View className="bg-white pt-14 pb-4 px-5 border-b border-gray-200 shadow-sm z-10">
                 <View className="flex-row items-center justify-between mb-4">
                     <View className="flex-row items-center">
-                        <TouchableOpacity onPress={() => router.back()} className="mr-3"><Ionicons name="arrow-back" size={24} /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.back()} className="mr-3">
+                            <Ionicons name="arrow-back" size={24} />
+                        </TouchableOpacity>
                         <Text className="text-xl font-bold">Kasir</Text>
                     </View>
-                    <View className="bg-blue-100 px-3 py-1 rounded-full"><Text className="text-blue-700 text-xs font-bold">{cart.length} Item</Text></View>
+                    <View className="bg-blue-100 px-3 py-1 rounded-full">
+                        <Text className="text-blue-700 text-xs font-bold">{cart.length} Item</Text>
+                    </View>
                 </View>
 
-                {/* Input Search + Tombol Scan */}
+                {/* Input Search + Scan */}
                 <View className="flex-row items-center gap-2">
                     <TextInput
                         className="flex-1 bg-gray-100 rounded-xl px-4 py-3"
@@ -434,7 +327,6 @@ export default function KasirScreen() {
                         <Ionicons name="scan-outline" size={24} color="white" />
                     </TouchableOpacity>
                 </View>
-
             </View>
 
             <View className="flex-1 flex-row">
@@ -484,12 +376,18 @@ export default function KasirScreen() {
                                 <View key={item.id} className="flex-row justify-between items-center mb-2 border-b border-gray-100 pb-2">
                                     <Text className="flex-1 text-sm font-medium" numberOfLines={1}>{item.name}</Text>
                                     <View className="flex-row items-center gap-3">
-                                        <TouchableOpacity onPress={() => updateQty(item.id, -1)}><Ionicons name="remove-circle-outline" size={22} color="gray" /></TouchableOpacity>
+                                        <TouchableOpacity onPress={() => updateQty(item.id, -1)}>
+                                            <Ionicons name="remove-circle-outline" size={22} color="gray" />
+                                        </TouchableOpacity>
                                         <Text className="font-bold w-4 text-center">{item.qty}</Text>
-                                        <TouchableOpacity onPress={() => updateQty(item.id, 1)}><Ionicons name="add-circle-outline" size={22} color="gray" /></TouchableOpacity>
+                                        <TouchableOpacity onPress={() => updateQty(item.id, 1)}>
+                                            <Ionicons name="add-circle-outline" size={22} color="gray" />
+                                        </TouchableOpacity>
                                     </View>
                                     <Text className="w-20 text-right text-sm font-bold">{(item.price * item.qty).toLocaleString('id-ID')}</Text>
-                                    <TouchableOpacity onPress={() => removeFromCart(item.id)} className="ml-2"><Ionicons name="trash" size={18} color="red" /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => removeFromCart(item.id)} className="ml-2">
+                                        <Ionicons name="trash" size={18} color="red" />
+                                    </TouchableOpacity>
                                 </View>
                             ))}
                         </ScrollView>
@@ -509,18 +407,35 @@ export default function KasirScreen() {
                 <View style={StyleSheet.absoluteFillObject}>
                     <CameraView
                         style={StyleSheet.absoluteFillObject}
-                        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-                        barcodeScannerSettings={{
-                            barcodeTypes: ["qr", "ean13", "code128", "code39"],
-                        }}
+                        onBarcodeScanned={handleBarCodeScanned}
+                        barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "code128", "code39"] }}
                     >
                         <View className="flex-1 justify-between bg-black/50 p-6">
+
+                            {/* Jumlah item di keranjang */}
+                            <View style={{
+                                position: 'absolute',
+                                top: 40,
+                                right: 20,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: 12
+                            }}>
+                                <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                                    Total Item: {cart.reduce((sum, item) => sum + item.qty, 0)}
+                                </Text>
+                            </View>
+
+                            {/* Judul scan */}
                             <Text className="text-white text-center text-xl font-bold mt-10">Pindai Barcode Produk</Text>
 
+                            {/* Kotak fokus scan */}
                             <View className="flex-1 items-center justify-center">
                                 <View className="w-64 h-64 border-4 border-white opacity-70" />
                             </View>
 
+                            {/* Tombol batal scan */}
                             <TouchableOpacity
                                 onPress={() => { setModalScannerVisible(false); setScanned(false); }}
                                 className="bg-red-600 py-4 rounded-xl items-center mb-6"
@@ -529,10 +444,29 @@ export default function KasirScreen() {
                             </TouchableOpacity>
                         </View>
                     </CameraView>
+
+                    {/* Custom Toast */}
+                    {toastMessage && (
+                        <View style={{
+                            position: 'absolute',
+                            top: 100,
+                            left: 20,
+                            right: 20,
+                            backgroundColor: toastMessage.type === 'error' ? '#EF4444' : '#22C55E',
+                            padding: 12,
+                            borderRadius: 8,
+                            zIndex: 9999,
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <Text style={{ color: 'white', fontWeight: 'bold' }}>{toastMessage.text}</Text>
+                        </View>
+                    )}
                 </View>
             </Modal>
 
-            {/* --- MODAL PEMBAYARAN (Tambah input bayar dan kembalian) --- */}
+
+            {/* --- MODAL PEMBAYARAN --- */}
             <Modal visible={modalBayarVisible} transparent animationType="slide">
                 <View className="flex-1 bg-black/50 justify-end">
                     <View className="bg-white rounded-t-3xl p-6">
@@ -541,14 +475,11 @@ export default function KasirScreen() {
                             <Text className="text-gray-500 text-sm mb-1">Total Tagihan</Text>
                             <Text className="text-3xl font-bold text-blue-600">Rp {totalBelanja.toLocaleString('id-ID')}</Text>
                         </View>
-
-                        {/* Input Jumlah Bayar */}
                         <View className="mb-4">
                             <Text className="text-sm text-gray-600 mb-2">Jumlah Bayar</Text>
                             <TextInput
                                 value={amountPaidStr}
                                 onChangeText={(text) => {
-                                    // Hanya angka: hapus karakter non-digit, tapi tetap tampilkan sebagai string
                                     const cleaned = text.replace(/[^\d]/g, '');
                                     setAmountPaidStr(cleaned);
                                 }}
@@ -558,8 +489,6 @@ export default function KasirScreen() {
                             />
                             <Text className="text-xs text-gray-400 mt-2">Masukkan angka tanpa pemisah. Contoh: 20000</Text>
                         </View>
-
-                        {/* Tampilkan Kembalian */}
                         <View className="mb-4 items-center">
                             <Text className="text-sm text-gray-500">Kembalian</Text>
                             <Text className={`text-2xl font-bold ${changeNumber < 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -567,7 +496,6 @@ export default function KasirScreen() {
                             </Text>
                             {changeNumber < 0 && <Text className="text-xs text-red-500 mt-1">Bayar kurang Rp {formatRupiah(Math.abs(changeNumber))}</Text>}
                         </View>
-
                         <TouchableOpacity onPress={handleCheckout} disabled={loading || amountPaidNumber < totalBelanja} className={`py-4 rounded-xl items-center mb-3 ${amountPaidNumber < totalBelanja ? 'bg-gray-300' : 'bg-green-600'}`}>
                             {loading ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold text-lg">{amountPaidNumber < totalBelanja ? 'Bayar Kurang' : 'Proses Transaksi'}</Text>}
                         </TouchableOpacity>
@@ -582,14 +510,15 @@ export default function KasirScreen() {
             <Modal visible={modalStrukVisible} transparent animationType="fade">
                 <View className="flex-1 bg-black/60 justify-center items-center px-4">
                     <View className="bg-white w-full max-w-sm rounded-none overflow-hidden shadow-2xl">
+
                         {/* Header Struk */}
                         <View className="bg-white p-6 items-center border-b border-dashed border-gray-300">
                             <View className="w-12 h-12 bg-gray-900 rounded-full items-center justify-center mb-3">
                                 <MaterialCommunityIcons name="storefront" size={24} color="white" />
                             </View>
-                            <Text className="text-xl font-bold text-gray-900 uppercase tracking-widest">kaStok Store</Text>
-                            <Text className="text-xs text-gray-500 mt-1">Jl. Digital No. 1, Indonesia</Text>
-                            <Text className="text-xs text-gray-500">Telp: 0812-3456-7890</Text>
+                            <Text className="text-xl font-bold text-gray-900 uppercase tracking-widest">{profile?.store_name || "Nama Toko"}</Text>
+                            <Text className="text-xs text-gray-500 mt-1">{profile?.address || "Alamat"}</Text>
+                            <Text className="text-xs text-gray-500">{profile?.phone_number || "0811-1111-1111"}</Text>
                         </View>
 
                         {/* Detail Transaksi */}
@@ -604,7 +533,10 @@ export default function KasirScreen() {
                             </View>
 
                             {/* Garis Pemisah */}
-                            <View className="h-[1px] bg-gray-200 mb-4 w-full" style={{ borderStyle: 'dashed', borderWidth: 1, borderColor: '#e5e7eb' }} />
+                            <View
+                                className="h-[1px] bg-gray-200 mb-4 w-full"
+                                style={{ borderStyle: 'dashed', borderWidth: 1, borderColor: '#e5e7eb' }}
+                            />
 
                             {/* List Item */}
                             <ScrollView className="max-h-48">
@@ -622,7 +554,10 @@ export default function KasirScreen() {
                             </ScrollView>
 
                             {/* Garis Pemisah */}
-                            <View className="h-[1px] bg-gray-200 mt-4 mb-4 w-full" style={{ borderStyle: 'dashed', borderWidth: 1, borderColor: '#e5e7eb' }} />
+                            <View
+                                className="h-[1px] bg-gray-200 mt-4 mb-4 w-full"
+                                style={{ borderStyle: 'dashed', borderWidth: 1, borderColor: '#e5e7eb' }}
+                            />
 
                             {/* Total */}
                             <View className="flex-row justify-between items-center">
@@ -645,7 +580,7 @@ export default function KasirScreen() {
                             <Text className="text-center text-[10px] text-gray-400 mt-6">--- TERIMA KASIH ---</Text>
                         </View>
 
-                        {/* Tombol Aksi Struk (Diubah) */}
+                        {/* Tombol Aksi Struk */}
                         <View className="bg-gray-50 p-4 flex-row gap-2">
                             <TouchableOpacity
                                 onPress={() => {
@@ -667,7 +602,7 @@ export default function KasirScreen() {
                                 <Text className="font-bold text-white">Cetak</Text>
                             </TouchableOpacity>
 
-                            {/* Tombol JADIKAN PDF (BARU) */}
+                            {/* Tombol PDF */}
                             <TouchableOpacity
                                 onPress={() => print('pdf')}
                                 disabled={loading}
@@ -678,18 +613,43 @@ export default function KasirScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Efek Kertas Sobek di Bawah */}
+                        {/* Efek Kertas Sobek */}
                         <View className="h-4 bg-gray-50 w-full flex-row">
                             {[...Array(20)].map((_, i) => (
                                 <View key={i} className="w-4 h-4 bg-white rounded-full -mt-2 mr-1" />
                             ))}
                         </View>
+
                     </View>
                 </View>
             </Modal>
 
+
+            {/* --- Custom Toast --- */}
+            {toastMessage && (
+                <View style={{
+                    position: 'absolute',
+                    top: 50,
+                    left: 20,
+                    right: 20,
+                    backgroundColor: toastMessage.type === 'error' ? '#EF4444' : toastMessage.type === 'success' ? '#22C55E' : '#3B82F6',
+                    padding: 12,
+                    borderRadius: 8,
+                    zIndex: 9999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3.84,
+                    elevation: 5
+                }}>
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>{toastMessage.text}</Text>
+                </View>
+            )}
         </View>
     );
+
 }
 
 const styles = StyleSheet.create({

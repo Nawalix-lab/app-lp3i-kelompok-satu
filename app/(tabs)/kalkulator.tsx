@@ -3,13 +3,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
+  StyleSheet
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import "../../global.css";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 export default function KalkulatorScreen() {
   const [display, setDisplay] = useState("0");
@@ -78,7 +78,13 @@ export default function KalkulatorScreen() {
           break;
         case "/":
           if (inputValue === 0) {
-            Alert.alert("Error", "Tidak bisa membagi dengan 0");
+            Toast.show ({
+              type: "error",
+              text1: "Error",
+              text2: "Tidak bisa membagi dengan 0", 
+              position: "top",
+              visibilityTime: 3000,
+            });
             handleClear();
             return;
           }
@@ -88,6 +94,17 @@ export default function KalkulatorScreen() {
 
       setDisplay(String(result));
       setFirstOperand(result);
+    }
+
+    if (nextOperator !== "=") {
+      const symbol =
+        nextOperator === "*"
+          ? "×"
+          : nextOperator === "/"
+            ? "÷"
+            : nextOperator;
+
+      setDisplay((prev) => prev + " " + symbol + " ");
     }
 
     setOperator(nextOperator === "=" ? null : nextOperator);

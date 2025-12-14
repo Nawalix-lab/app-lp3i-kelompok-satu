@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
 import { useColorScheme } from "nativewind";
+import Toast from "react-native-toast-message";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -94,7 +95,14 @@ export default function ProfileScreen() {
 
   async function uploadAvatar(uri: string) {
     if (!userId) {
-      Alert.alert("Error", "User ID tidak ditemukan");
+      Toast.show({
+        type: 'error',
+        text1: 'Sesi pengguna tidak ditemukan',
+        text2: 'Mohon login kembali',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+      return;
       return;
     }
 
